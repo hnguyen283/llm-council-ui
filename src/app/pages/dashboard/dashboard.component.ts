@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, signal, computed, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -6,23 +6,6 @@ import { AuthService } from '../../core/auth.service';
 import { JobsService, JobStatus } from '../../core/jobs.service';
 import { LOCALES, LocaleCode, LocaleService } from '../../core/locale.service';
 import { DirectAnswerComponent } from './direct-answer.component';
-
-/**
- * Workflow stage labels in the order the orchestrator publishes them.
- * The keys must match the prefix the backend emits on the stage field
- * of the job snapshot so the timeline can light up the active stage.
- */
-const STAGES = [
-  { key: 'queued', label: 'Queued' },
-  { key: 'planning', label: 'Planning queries' },
-  { key: 'collecting', label: 'Collecting (Gemini)' },
-  { key: 'validating', label: 'Validating sources' },
-  { key: 'analyzing', label: 'Analyzing (GPT)' },
-  { key: 'debating', label: 'Debate round' },
-  { key: 'scoring', label: 'Scoring sources (GPT)' },
-  { key: 'judging', label: 'Final judgment' },
-  { key: 'done', label: 'Done' }
-];
 
 @Component({
   selector: 'app-dashboard',
@@ -77,18 +60,21 @@ const STAGES = [
 
       @if (status(); as s) {
         <section class="progress-card">
-          <h2>Progress</h2>
-          <div class="timeline">
-            @for (stage of stages; track stage.key) {
-              <div class="stage" [class.active]="isActiveStage(stage.key)" [class.done]="isDoneStage(stage.key)">
-                <div class="dot"></div>
-                <div class="label">{{ stage.label }}</div>
-              </div>
-            }
-          </div>
           <div class="meta">
-            <span class="state state-{{ s.state.toLowerCase() }}">{{ s.state }}</span>
-            <span class="stage-text">{{ s.stage }}</span>
+            <h2>Progress</h2>
+            <span
+              class="state state-{{ s.state.toLowerCase() }}"
+              [class.pulsing]="s.state === 'RUNNING' || s.state === 'PENDING'"
+            >{{ s.state }}</span>
+            <span class="stage-text" aria-live="polite">{{ s.stage }}</span>
+            <span class="stage-meta">
+              <span class="update-count" [title]="'Backend updates received: ' + updateCount()">
+                #{{ updateCount() }}
+              </span>
+              <span class="time-since" [title]="'Last backend update: ' + s.updatedAt">
+                {{ timeSinceUpdate() }}
+              </span>
+            </span>
           </div>
           @if (s.error) {
             <div class="error">{{ s.error }}</div>
@@ -112,17 +98,6 @@ const STAGES = [
           </div>
 
           <div class="block">
-            <h3>Key findings</h3>
-            @if (report.keyFindings.length === 0) {
-              <p class="dim">No findings produced.</p>
-            } @else {
-              <ul>
-                @for (f of report.keyFindings; track f) { <li>{{ f }}</li> }
-              </ul>
-            }
-          </div>
-
-          <div class="block">
             <h3>Conflicts &amp; contradictions</h3>
             @if (report.conflicts.length === 0) {
               <p class="dim">None detected.</p>
@@ -130,6 +105,27 @@ const STAGES = [
               <ul>
                 @for (c of report.conflicts; track c) { <li>{{ c }}</li> }
               </ul>
+            }
+          </div>
+
+          <div class="block">
+            <button
+              type="button"
+              class="collapsible-header"
+              [attr.aria-expanded]="keyFindingsOpen()"
+              (click)="toggleKeyFindings()"
+            >
+              <span class="chevron" [class.open]="keyFindingsOpen()" aria-hidden="true">&#9656;</span>
+              <h3>Key findings ({{ report.keyFindings.length }})</h3>
+            </button>
+            @if (keyFindingsOpen()) {
+              @if (report.keyFindings.length === 0) {
+                <p class="dim">No findings produced.</p>
+              } @else {
+                <ul>
+                  @for (f of report.keyFindings; track f) { <li>{{ f }}</li> }
+                </ul>
+              }
             }
           </div>
 
@@ -235,43 +231,13 @@ const STAGES = [
     h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--text-dim); }
     .dim { color: var(--text-dim); margin: 0; }
 
-    /* Timeline */
-    .timeline {
+    .meta {
       display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-    }
-    .stage {
-      display: flex;
+      gap: 12px;
       align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: var(--radius);
-      font-size: 12px;
-      color: var(--text-dim);
+      font-size: 13px;
     }
-    .stage .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--border);
-    }
-    .stage.done .dot { background: var(--green); }
-    .stage.active {
-      background: rgba(59, 130, 246, 0.12);
-      color: var(--text);
-    }
-    .stage.active .dot {
-      background: var(--accent);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(1.4); }
-    }
-
-    .meta { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+    .meta h2 { margin: 0; }
     .state {
       font-weight: 600;
       padding: 2px 8px;
@@ -283,7 +249,31 @@ const STAGES = [
     .state-running  { background: rgba(59,130,246,0.15); color: var(--accent); }
     .state-done     { background: rgba(16,185,129,0.15); color: var(--green); }
     .state-failed   { background: rgba(239,68,68,0.15); color: var(--red); }
-    .stage-text { color: var(--text-dim); }
+    /* Subtle pulse on the badge while the workflow is in flight so the
+       user has a visual cue that the connection is alive even between
+       stage transitions. */
+    .state.pulsing { animation: state-pulse 1.6s ease-in-out infinite; }
+    @keyframes state-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.55; }
+    }
+    .stage-text {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .stage-meta {
+      margin-left: auto;
+      display: inline-flex;
+      gap: 8px;
+      color: var(--text-dim);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .update-count {
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(148,163,184,0.12);
+    }
     .error {
       margin-top: 12px;
       padding: 10px 12px;
@@ -347,6 +337,75 @@ const STAGES = [
     .score-num.score-high   { color: var(--green); background: transparent; }
     .score-num.score-medium { color: var(--accent); background: transparent; }
     .score-num.score-low    { color: var(--red); background: transparent; }
+
+    /* Collapsible block header (used by "Key findings"). The whole
+       header is a button so the chevron and the title are part of one
+       click target — keeps the keyboard/screen-reader experience
+       coherent without needing extra ARIA wiring. */
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 0;
+      margin: 0 0 8px 0;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+    }
+    .collapsible-header:hover:not(:disabled) { background: transparent; }
+    .collapsible-header h3 { margin: 0; }
+    .chevron {
+      display: inline-block;
+      color: var(--text-dim);
+      transition: transform 0.15s ease;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .chevron.open { transform: rotate(90deg); }
+
+    /* Mobile: the dashboard is built around a 960px column with 32px
+       padding and a fixed-layout table. Below ~640px those defaults
+       overflow, so we shrink padding, stack the header, and let the
+       sources table scroll horizontally inside its block instead of
+       blowing out the viewport. */
+    @media (max-width: 640px) {
+      header {
+        padding: 12px 16px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .header-actions { flex-wrap: wrap; }
+
+      main {
+        padding: 16px;
+        gap: 16px;
+      }
+      .query-card, .progress-card, .report {
+        padding: 16px;
+      }
+      .actions {
+        flex-wrap: wrap;
+      }
+      .lang-hint {
+        margin-left: 0;
+        width: 100%;
+      }
+
+      .report-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      /* Let the sources table scroll horizontally inside its block
+         rather than forcing the whole page wider than the viewport. */
+      .block { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table { min-width: 480px; }
+      th, td { padding: 6px 8px; }
+      .score { min-width: 80px; }
+      .score-bar { min-width: 40px; }
+    }
   `]
 })
 /**
@@ -357,19 +416,58 @@ const STAGES = [
  * job streaming endpoint as soon as the orchestrator accepts the
  * submission and renders the final report when the workflow completes.
  */
-export class DashboardComponent {
+export class DashboardComponent implements OnDestroy {
   private jobs = inject(JobsService);
   private auth = inject(AuthService);
   private router = inject(Router);
   private localeService = inject(LocaleService);
 
-  readonly stages = STAGES;
   readonly locales = LOCALES;
   query = '';
   status = signal<JobStatus | null>(null);
+  /**
+   * Whether the "Key findings" panel is expanded. The panel is
+   * collapsed by default because the conflicts & contradictions
+   * section above it carries the more actionable signal; users
+   * opt into the full findings list when they want detail.
+   */
+  keyFindingsOpen = signal(false);
+  /**
+   * Number of streaming snapshots received from the backend for the
+   * current run. Surfaces in the UI so the user can tell that the
+   * connection is alive and progressing even when the coarse `stage`
+   * label doesn't change between pings.
+   */
+  updateCount = signal(0);
+  /**
+   * Monotonic 1Hz tick that re-evaluates time-derived computeds (e.g.
+   * "updated 2s ago"). Kept as a signal so the framework can fold it
+   * into the change-detection graph instead of us forcing
+   * markForCheck() on every tick.
+   */
+  private now = signal(Date.now());
+  private nowInterval: ReturnType<typeof setInterval> | null = null;
   isRunning = computed(() => {
     const s = this.status();
     return s !== null && (s.state === 'PENDING' || s.state === 'RUNNING');
+  });
+  /**
+   * Human-readable "Xs ago" string derived from the latest
+   * `updatedAt` on the job snapshot. Re-evaluates every second so the
+   * user can see freshness without us having to push a custom
+   * formatter on every stream chunk.
+   */
+  timeSinceUpdate = computed(() => {
+    const s = this.status();
+    if (!s) return '';
+    const t = Date.parse(s.updatedAt);
+    if (Number.isNaN(t)) return '';
+    const deltaSec = Math.max(0, Math.round((this.now() - t) / 1000));
+    if (deltaSec < 1) return 'just now';
+    if (deltaSec < 60) return `${deltaSec}s ago`;
+    const m = Math.floor(deltaSec / 60);
+    const s2 = deltaSec % 60;
+    return `${m}m ${s2}s ago`;
   });
 
   locale = this.localeService.locale;
@@ -385,6 +483,11 @@ export class DashboardComponent {
     this.localeService.set(code);
   }
 
+  /** Toggles the collapsible "Key findings" panel. */
+  toggleKeyFindings() {
+    this.keyFindingsOpen.update(v => !v);
+  }
+
   /**
    * Submits the current question and opens the streaming subscription
    * as soon as the orchestrator returns the new job identifier.
@@ -392,6 +495,9 @@ export class DashboardComponent {
   run() {
     this.cancelStream();
     this.status.set(null);
+    this.keyFindingsOpen.set(false);
+    this.updateCount.set(0);
+    this.startNowTicker();
     this.jobs.submit(this.query.trim(), this.localeService.current()).subscribe({
       next: ({ jobId }) => this.openStream(jobId),
       error: err => this.status.set({
@@ -433,23 +539,6 @@ export class DashboardComponent {
     });
   }
 
-  /** Reports whether the timeline stage is the active one. */
-  isActiveStage(key: string): boolean {
-    const s = this.status();
-    if (!s || s.state === 'DONE' || s.state === 'FAILED') return false;
-    return (s.stage || '').startsWith(key);
-  }
-  /** Reports whether the timeline stage has already been completed. */
-  isDoneStage(key: string): boolean {
-    const s = this.status();
-    if (!s) return false;
-    if (s.state === 'DONE' && key === 'done') return true;
-    if (s.state === 'DONE') return key !== 'done';
-    const currentIdx = STAGES.findIndex(st => (s.stage || '').startsWith(st.key));
-    const targetIdx = STAGES.findIndex(st => st.key === key);
-    return currentIdx > targetIdx;
-  }
-
   /** Extracts the numeric portion of a tier label for CSS class binding. */
   tierClass(reliability: string): string {
     if (reliability.endsWith('1')) return '1';
@@ -488,13 +577,25 @@ export class DashboardComponent {
    */
   private openStream(jobId: string) {
     this.streamSub = this.jobs.stream(jobId).subscribe({
-      next: status => this.status.set(status),
-      error: err => this.status.set({
-        jobId, state: 'FAILED', stage: 'failed',
-        updatedAt: new Date().toISOString(),
-        result: null,
-        error: err?.message || 'Stream error'
-      })
+      next: status => {
+        // Bump the visible update counter on every snapshot so the
+        // user sees mid-stage pings even when `stage` stays the same.
+        this.updateCount.update(n => n + 1);
+        this.status.set(status);
+        if (status.state === 'DONE' || status.state === 'FAILED') {
+          this.stopNowTicker();
+        }
+      },
+      error: err => {
+        this.updateCount.update(n => n + 1);
+        this.status.set({
+          jobId, state: 'FAILED', stage: 'failed',
+          updatedAt: new Date().toISOString(),
+          result: null,
+          error: err?.message || 'Stream error'
+        });
+        this.stopNowTicker();
+      }
     });
   }
 
@@ -502,5 +603,29 @@ export class DashboardComponent {
   private cancelStream() {
     this.streamSub?.unsubscribe();
     this.streamSub = null;
+    this.stopNowTicker();
+  }
+
+  /**
+   * Starts the 1Hz ticker that drives the relative "Xs ago" label.
+   * Safe to call repeatedly — only one interval is ever live.
+   */
+  private startNowTicker() {
+    if (this.nowInterval) return;
+    this.now.set(Date.now());
+    this.nowInterval = setInterval(() => this.now.set(Date.now()), 1000);
+  }
+
+  /** Stops the relative-time ticker. */
+  private stopNowTicker() {
+    if (this.nowInterval) {
+      clearInterval(this.nowInterval);
+      this.nowInterval = null;
+    }
+  }
+
+  /** Tears down stream + interval when the component is destroyed. */
+  ngOnDestroy() {
+    this.cancelStream();
   }
 }
