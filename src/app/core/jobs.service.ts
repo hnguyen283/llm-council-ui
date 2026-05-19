@@ -164,6 +164,20 @@ export class JobsService {
   }
 
   /**
+   * Returns the orchestrator's view of the user's currently active
+   * (non-terminal) job, or `null` when none exists.
+   *
+   * Fallback path used by the dashboard when its local cache is
+   * empty (cleared browser data, fresh login on a new browser
+   * profile, etc.) but the auth session is still valid. The server
+   * answers with `204 No Content` for "no active job", which Angular
+   * surfaces as a `null` body on the typed observable.
+   */
+  active(): Observable<JobStatus | null> {
+    return this.http.get<JobStatus | null>('/jobs/active');
+  }
+
+  /**
    * Asks the orchestrator to cancel an in-flight job. Returns the
    * authoritative snapshot — typically `CANCEL_REQUESTED` for a
    * pending/running job, or the existing terminal snapshot when the
