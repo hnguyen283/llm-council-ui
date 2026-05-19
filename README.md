@@ -29,6 +29,20 @@ Opens on http://localhost:4200. Requires the backend stack to be running on `loc
 
 The Angular dev server proxies `/auth/**` and `/jobs/**` to `localhost:8080` (see `proxy.conf.json`), so there are no CORS issues during development.
 
+For access from another device on the local network, bind the dev server to all interfaces:
+
+```bash
+npm run start:lan
+```
+
+Then browse to `http://192.168.1.7:4200` from the other device. If Windows Firewall prompts, allow Node.js on private networks; otherwise open inbound TCP port `4200`.
+
+If you bypass the Angular proxy and call the gateway directly from a browser origin, include the exact UI origins in the backend `CORS_ALLOWED_ORIGINS` value, for example:
+
+```bash
+CORS_ALLOWED_ORIGINS=http://localhost:4200,http://192.168.1.7:4200,http://172.22.240.1:4200,http://localhost:8080
+```
+
 ## Flow
 
 1. **Login** at `/login` — backend currently accepts any non-empty credentials. JWT is stored in `localStorage`.
