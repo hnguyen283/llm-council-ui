@@ -108,6 +108,17 @@ import { DirectAnswerComponent } from './direct-answer.component';
             </span>
           </div>
 
+          @if (report.degradationNotes && report.degradationNotes.length > 0) {
+            <div class="pipeline-notes" role="status">
+              <h3>Run notes</h3>
+              <ul>
+                @for (note of report.degradationNotes; track note) {
+                  <li>{{ note }}</li>
+                }
+              </ul>
+            </div>
+          }
+
           <div class="block">
             <h3>Conflicts &amp; contradictions</h3>
             @if (report.conflicts.length === 0) {
@@ -325,6 +336,24 @@ import { DirectAnswerComponent } from './direct-answer.component';
     .confidence-high   { background: rgba(16,185,129,0.15); color: var(--green); }
     .confidence-medium { background: rgba(245,158,11,0.15); color: var(--amber); }
     .confidence-low    { background: rgba(239,68,68,0.15); color: var(--red); }
+    .pipeline-notes {
+      margin: 12px 0 4px 0;
+      padding: 12px 14px;
+      border-left: 3px solid var(--amber);
+      background: rgba(245,158,11,0.10);
+      border-radius: var(--radius);
+    }
+    .pipeline-notes h3 {
+      color: var(--amber);
+      margin-bottom: 6px;
+    }
+    .pipeline-notes ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .pipeline-notes li {
+      margin-bottom: 4px;
+    }
 
     .block { margin-top: 20px; }
     ul { margin: 0; padding-left: 20px; }

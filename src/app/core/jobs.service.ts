@@ -38,6 +38,8 @@ export interface FinalReport {
   conflicts: string[];
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
   sources: RankedSource[];
+  degraded?: boolean;
+  degradationNotes?: string[];
   directAnswer?: string | null;
 }
 
