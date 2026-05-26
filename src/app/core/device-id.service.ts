@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class DeviceIdService {
-  private readonly storageKey = 'llm-counsil.device-id.v1';
+  private readonly storageKey = 'llm-council.device-id.v1';
   private fallbackId: string | null = null;
 
   current(): string {

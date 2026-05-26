@@ -24,7 +24,7 @@ export const LOCALES: LocaleOption[] = [
 ];
 
 /** Browser-storage key used to persist the chosen locale across sessions. */
-const STORAGE_KEY = 'llm-counsil.locale';
+const STORAGE_KEY = 'llm-council.locale';
 
 /** Locale used when no preference is recorded in browser storage. */
 const DEFAULT_LOCALE: LocaleCode = 'en_US';

@@ -14,7 +14,7 @@ import { DirectAnswerComponent } from './direct-answer.component';
   imports: [FormsModule, DirectAnswerComponent],
   template: `
     <header>
-      <div class="brand">LLM Counsil</div>
+      <div class="brand">LLM Council</div>
       <div class="header-actions">
         <div class="lang-switcher" role="group" aria-label="Language">
           @for (l of locales; track l.code) {

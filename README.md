@@ -1,6 +1,6 @@
-# LLM Counsil — Angular Dashboard
+# LLM Council — Angular Dashboard
 
-Simple SPA for the [llm-counsil](../llm-counsil) Spring backend. Submits a
+Simple SPA for the [llm-council](../llm-council) Spring backend. Submits a
 research query, streams workflow progress over SSE, and renders the final
 adjudicated report.
 

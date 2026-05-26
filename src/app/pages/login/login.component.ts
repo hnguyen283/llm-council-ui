@@ -28,7 +28,7 @@ import { AuthCode } from '../../core/error.codes';
   template: `
     <div class="wrap">
       <div class="card">
-        <h1>LLM Counsil</h1>
+        <h1>LLM Council</h1>
         <p class="subtitle">Sign in to run multi-model research jobs</p>
 
         @if (banner()) {

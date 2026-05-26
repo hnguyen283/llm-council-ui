@@ -44,7 +44,7 @@ export interface JobSessionRecord {
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Sole storage key. Bump the version suffix when the schema changes. */
-const STORAGE_KEY = 'llm-counsil.job-session.v1';
+const STORAGE_KEY = 'llm-council.job-session.v1';
 
 /** Current record version literal. */
 const CURRENT_VERSION = 1 as const;
