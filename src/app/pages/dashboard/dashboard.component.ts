@@ -93,6 +93,32 @@ import { DirectAnswerComponent } from './direct-answer.component';
         </section>
       }
 
+      @if (status()?.quickAnswer; as qa) {
+        <section class="quick-answer-card">
+          <button
+            type="button"
+            class="collapsible-header"
+            [attr.aria-expanded]="quickAnswerExpanded()"
+            (click)="toggleQuickAnswer()"
+          >
+            <span class="chevron" [class.open]="quickAnswerExpanded()" aria-hidden="true">&#9656;</span>
+            <span class="lightning-bolt">⚡</span>
+            <h3 style="margin: 0 8px 0 4px; display: inline-block;">Quick Answer</h3>
+            @if (status()?.state === 'DONE') {
+              <span class="superseded-badge">Superseded by full analysis</span>
+            } @else {
+              <span class="running-badge pulsing">Based on previous research — full analysis running...</span>
+            }
+          </button>
+          
+          @if (quickAnswerExpanded()) {
+            <div class="quick-answer-content" style="margin-top: 12px; line-height: 1.6; font-size: 14px;">
+              <p style="margin: 0;">{{ qa }}</p>
+            </div>
+          }
+        </section>
+      }
+
       @if (status()?.result; as report) {
         <!-- Post-judge synthesised one-paragraph answer. The panel
              hides itself when synthesis was skipped, errored, or
@@ -244,6 +270,52 @@ import { DirectAnswerComponent } from './direct-answer.component';
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 24px;
+    }
+    .quick-answer-card {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(147, 51, 234, 0.08) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-top: 16px;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.05);
+      transition: all 0.3s ease;
+    }
+    .quick-answer-card:hover {
+      box-shadow: 0 6px 24px rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .lightning-bolt {
+      font-size: 16px;
+      color: var(--amber);
+      animation: lightning-glow 2s infinite alternate;
+    }
+    @keyframes lightning-glow {
+      from { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.2)); }
+      to { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7)); }
+    }
+    .running-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(59, 130, 246, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+    }
+    .running-badge.pulsing {
+      animation: running-pulse 2s infinite;
+    }
+    @keyframes running-pulse {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 0.55; }
+    }
+    .superseded-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: rgba(148, 163, 184, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
     }
     .query-label { display: block; margin-bottom: 8px; color: var(--text-dim); font-size: 13px; }
     textarea { resize: vertical; min-height: 60px; }
@@ -519,6 +591,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * opt into the full findings list when they want detail.
    */
   keyFindingsOpen = signal(false);
+  userQuickAnswerExpanded = signal<boolean | null>(null);
+  quickAnswerExpanded = computed(() => {
+    if (this.userQuickAnswerExpanded() !== null) {
+      return this.userQuickAnswerExpanded();
+    }
+    return this.status()?.state !== 'DONE';
+  });
+
+  toggleQuickAnswer() {
+    this.userQuickAnswerExpanded.set(!this.quickAnswerExpanded());
+  }
+
   /**
    * Number of streaming snapshots received from the backend for the
    * current run. Surfaces in the UI so the user can tell that the
@@ -630,6 +714,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.status.set(null);
     this.canceling.set(false);
     this.keyFindingsOpen.set(false);
+    this.userQuickAnswerExpanded.set(null);
     this.updateCount.set(0);
     this.startNowTicker();
 
@@ -729,6 +814,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.cancelStream();
     this.status.set(null);
     this.canceling.set(false);
+    this.userQuickAnswerExpanded.set(null);
     this.activeJobId = null;
     this.activeClientRequestId = null;
     this.query = '';

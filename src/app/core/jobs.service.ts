@@ -76,6 +76,7 @@ export interface JobStatus {
   updatedAt: string;
   result: FinalReport | null;
   error: string | null;
+  quickAnswer?: string | null;
 }
 
 /**
