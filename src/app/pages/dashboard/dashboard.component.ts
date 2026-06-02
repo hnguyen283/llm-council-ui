@@ -7,6 +7,7 @@ import { JobsService, JobStatus } from '../../core/jobs.service';
 import { JobSessionStorageService, JobSessionRecord } from '../../core/job-session-storage.service';
 import { LOCALES, LocaleCode, LocaleService } from '../../core/locale.service';
 import { DirectAnswerComponent } from './direct-answer.component';
+import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -68,6 +69,30 @@ import { DirectAnswerComponent } from './direct-answer.component';
           <span class="lang-hint">Prompts in {{ activeLocaleLabel() }}</span>
         </div>
       </section>
+
+      @if (recentQueries().length > 0) {
+        <section class="recent-queries-card">
+          <h3>Recent Research</h3>
+          <div class="recent-queries-list">
+            @for (item of recentQueries(); track item.query) {
+              <button
+                type="button"
+                class="recent-query-item"
+                [disabled]="isRunning()"
+                (click)="loadRecentQuery(item)"
+              >
+                <div class="recent-query-content">
+                  <span class="recent-query-text">{{ item.query }}</span>
+                  <span class="recent-query-meta">
+                    {{ activeLocaleLabelOf(item.locale) }} &bull; {{ timeSinceTimestamp(item.timestamp) }}
+                  </span>
+                </div>
+                <span class="recent-query-arrow">&rarr;</span>
+              </button>
+            }
+          </div>
+        </section>
+      }
 
       @if (status(); as s) {
         <section class="progress-card">
@@ -494,6 +519,69 @@ import { DirectAnswerComponent } from './direct-answer.component';
     }
     .chevron.open { transform: rotate(90deg); }
 
+    .recent-queries-card {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .recent-queries-card h3 {
+      margin: 0 0 16px 0;
+      font-size: 14px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .recent-queries-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .recent-query-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s ease;
+    }
+    .recent-query-item:hover:not(:disabled) {
+      background: rgba(59, 130, 246, 0.08);
+      border-color: rgba(59, 130, 246, 0.3);
+      transform: translateX(4px);
+    }
+    .recent-query-item:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .recent-query-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .recent-query-text {
+      font-weight: 500;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .recent-query-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .recent-query-arrow {
+      color: var(--text-dim);
+      font-size: 16px;
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+    .recent-query-item:hover:not(:disabled) .recent-query-arrow {
+      color: var(--accent);
+      transform: scale(1.1);
+    }
+
     /* Mobile: the dashboard is built around a 960px column with 32px
        padding and a fixed-layout table. Below ~640px those defaults
        overflow, so we shrink padding, stack the header, and let the
@@ -558,6 +646,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * without a backend round-trip.
    */
   private storage = inject(JobSessionStorageService);
+  private promptCache = inject(PromptCacheService);
+  recentQueries = signal<PromptCacheEntry[]>([]);
 
   readonly locales = LOCALES;
   query = '';
@@ -690,6 +780,60 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Toggles the collapsible "Key findings" panel. */
   toggleKeyFindings() {
     this.keyFindingsOpen.update(v => !v);
+  }
+
+  loadRecentQueriesList() {
+    const userId = this.auth.currentUserId();
+    this.recentQueries.set(this.promptCache.load(userId));
+  }
+
+  activeLocaleLabelOf(code: string): string {
+    return LOCALES.find(l => l.code === code)?.label ?? code;
+  }
+
+  timeSinceTimestamp(timestamp: string): string {
+    const t = Date.parse(timestamp);
+    if (Number.isNaN(t)) return '';
+    const deltaSec = Math.max(0, Math.round((this.now() - t) / 1000));
+    if (deltaSec < 1) return 'just now';
+    if (deltaSec < 60) return `${deltaSec}s ago`;
+    const m = Math.floor(deltaSec / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return new Date(t).toLocaleDateString();
+  }
+
+  loadRecentQuery(item: PromptCacheEntry) {
+    if (this.isRunning()) return;
+    this.cancelStream();
+    this.query = item.query;
+    this.status.set(item.status);
+    this.canceling.set(false);
+    this.userQuickAnswerExpanded.set(null);
+    this.updateCount.set(0);
+    this.activeJobId = null;
+    this.activeClientRequestId = null;
+
+    // Save as current active job session so page reload preserves the view
+    const userId = this.auth.currentUserId();
+    const sid = this.auth.currentSessionId();
+    if (userId && sid) {
+      const record: JobSessionRecord = {
+        version: 1,
+        userId,
+        sid,
+        clientRequestId: `cached-${item.status.jobId}`,
+        jobId: item.status.jobId,
+        query: item.query,
+        locale: item.locale,
+        submittedAt: item.status.updatedAt,
+        updatedAt: item.status.updatedAt,
+        status: item.status,
+        resumeUntil: '',
+      };
+      this.storage.save(record);
+    }
   }
 
   /**
@@ -925,6 +1069,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
           // not try to supersede an already-terminal job. The
           // cached snapshot still survives in storage for hydrate.
           this.activeJobId = null;
+
+          // Save to prompt cache if completed successfully
+          const userId = this.auth.currentUserId();
+          if (userId && status.state === 'DONE') {
+            this.promptCache.save(userId, this.query, status, this.localeService.current());
+            this.loadRecentQueriesList();
+          }
         }
       },
       error: err => {
@@ -940,28 +1091,47 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.router.navigate(['/login'], { queryParams: { reason: 'expired' } });
           return;
         }
-        const current = this.status();
-        if (current && this.isRunning()) {
-          this.status.set({
-            ...current,
-            error: 'Connection interrupted. Reconnecting...',
-            updatedAt: new Date().toISOString(),
-          });
-          this.streamSub = null;
-          this.reconnectStream(jobId);
-          return;
-        }
-        const failed: JobStatus = {
-          jobId, state: 'FAILED', stage: 'failed',
-          updatedAt: new Date().toISOString(),
-          result: null,
-          error: message,
-        };
-        this.status.set(failed);
-        this.persistStatus(failed);
-        this.stopNowTicker();
-        this.canceling.set(false);
-        this.activeJobId = null;
+
+        // Check if the job has finished on the backend before attempting to reconnect
+        this.jobs.get(jobId).subscribe({
+          next: status => {
+            if (this.activeJobId !== jobId) return;
+            if (this.isTerminalState(status.state)) {
+              // The job finished while we were disconnected/backgrounded!
+              this.status.set(status);
+              this.persistStatus(status);
+              this.clearReconnectTimer();
+              this.stopNowTicker();
+              this.canceling.set(false);
+              this.activeJobId = null;
+
+              // Save to prompt cache!
+              const userId = this.auth.currentUserId();
+              if (userId && status.state === 'DONE') {
+                this.promptCache.save(userId, this.query, status, this.localeService.current());
+                this.loadRecentQueriesList();
+              }
+            } else {
+              // Still running, proceed to reconnect
+              this.handleInterruptedConnection(jobId, message);
+            }
+          },
+          error: () => {
+            if (this.activeJobId !== jobId) return;
+            // If the GET request also fails (e.g. 404), treat it as failed.
+            const failed: JobStatus = {
+              jobId, state: 'FAILED', stage: 'failed',
+              updatedAt: new Date().toISOString(),
+              result: null,
+              error: message,
+            };
+            this.status.set(failed);
+            this.persistStatus(failed);
+            this.stopNowTicker();
+            this.canceling.set(false);
+            this.activeJobId = null;
+          }
+        });
       },
       complete: () => {
         if (this.activeJobId === jobId && this.isRunning()) {
@@ -969,6 +1139,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       },
     });
+  }
+
+  private handleInterruptedConnection(jobId: string, message: string) {
+    const current = this.status();
+    if (current && this.isRunning()) {
+      this.status.set({
+        ...current,
+        error: 'Connection interrupted. Reconnecting...',
+        updatedAt: new Date().toISOString(),
+      });
+      this.streamSub = null;
+      this.reconnectStream(jobId);
+    }
   }
 
   /**
@@ -1149,6 +1332,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     document.addEventListener('visibilitychange', this.visibilityHandler);
     this.hydrateFromCache();
+    this.loadRecentQueriesList();
   }
 
   /** Tears down stream + interval when the component is destroyed. */

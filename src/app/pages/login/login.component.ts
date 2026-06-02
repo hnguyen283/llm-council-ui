@@ -127,13 +127,18 @@ export class LoginComponent {
       next: () => this.router.navigate(['/dashboard']),
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        const code = err.headers?.get('X-Auth-Code') || (err.error as any)?.code;
+        const body = typeof err.error === 'object' && err.error !== null
+          ? err.error as { code?: unknown }
+          : null;
+        const code = err.headers?.get('X-Auth-Code') || (typeof body?.code === 'string' ? body.code : null);
         if (code === AuthCode.LOCKED)        this.error.set('Account is locked or disabled.');
-        else if (code === AuthCode.INVALID)  this.error.set('Username or password is incorrect.');
-        else if (err.status === 503)         this.error.set('Authentication is temporarily unavailable. Please try again shortly.');
-        else                                  this.error.set('Sign-in failed. Check the gateway is reachable.');
+        else if (code === AuthCode.INVALID || err.status === 401) this.error.set('Username or password is incorrect.');
+        else if (err.status === 403)         this.error.set('Access denied. Please sign in with an allowed account.');
+        else if (err.status === 0)           this.error.set('Gateway is unreachable. Check that the public API endpoint is reachable.');
+        else if (err.status === 503 || err.status >= 500) this.error.set('Authentication is temporarily unavailable. Please try again shortly.');
+        else                                  this.error.set('Sign-in failed. Please try again.');
         // Clear the password field on credential failure for safety.
-        if (code === AuthCode.INVALID) this.password = '';
+        if (code === AuthCode.INVALID || err.status === 401) this.password = '';
       }
     });
   }

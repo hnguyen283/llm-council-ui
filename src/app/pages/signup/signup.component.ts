@@ -105,7 +105,14 @@ export class SignupComponent {
     }
     if (code === 'ACCOUNT_USERNAME_TAKEN') return 'That username is already in use.';
     if (code === 'ACCOUNT_EMAIL_TAKEN')    return 'That email already has an account.';
-    if (code === 'ACCOUNT_VALIDATION')     return 'Please double-check the fields above.';
+    if (code === 'ACCOUNT_TAKEN' || e.status === 409) {
+      return 'That username or email is already in use.';
+    }
+    if (code === 'AUTH_VALIDATION' || code === 'ACCOUNT_VALIDATION' || e.status === 400) {
+      return 'Enter a valid email and a password with at least 12 characters.';
+    }
+    if (e.status === 0) return 'Gateway is unreachable. Check that the public API endpoint is reachable.';
+    if (e.status === 503 || e.status >= 500) return 'Account creation is temporarily unavailable. Please try again shortly.';
     return 'Could not create the account. Please try again.';
   }
 }
