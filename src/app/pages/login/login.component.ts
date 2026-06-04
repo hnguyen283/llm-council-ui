@@ -1,25 +1,17 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, OnInit, AfterViewInit, NgZone } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/auth.service';
 import { AuthCode } from '../../core/error.codes';
 
+declare var google: any;
+
 /**
  * Public sign-in page.
  *
- * Reads a `reason=` query param set by the interceptor / auth-service and
- * renders a calm contextual banner. Reasons:
- *
- *  - expired     — silent refresh failed; please sign in again.
- *  - displaced   — another device signed in; this one was bumped.
- *  - reused      — server detected a reused refresh token (forensic event).
- *  - locked      — too many failed attempts; surface the lock copy.
- *  - disabled    — admin-disabled account.
- *  - invalid     — fall-through copy after a bad-credentials submission.
- *  - logged_out  — neutral "you have been signed out" copy.
- *  - stale       — token version bumped (role/permission change).
- *  - signed_up   — after the signup flow; render a success banner.
+ * Supports traditional username/password login and Google Account sign-in.
+ * Reads configurations dynamically from /auth/config to set up Google SSO.
  */
 @Component({
   selector: 'app-login',
@@ -40,11 +32,11 @@ import { AuthCode } from '../../core/error.codes';
         <form (ngSubmit)="submit()">
           <label>
             <span>Username</span>
-            <input type="text" [(ngModel)]="username" name="username" autocomplete="username" required />
+            <input type="text" [(ngModel)]="username" name="username" autocomplete="username" required [disabled]="busy()" />
           </label>
           <label>
             <span>Password</span>
-            <input type="password" [(ngModel)]="password" name="password" autocomplete="current-password" required />
+            <input type="password" [(ngModel)]="password" name="password" autocomplete="current-password" required [disabled]="busy()" />
           </label>
 
           @if (error()) {
@@ -56,6 +48,12 @@ import { AuthCode } from '../../core/error.codes';
           </button>
         </form>
 
+        <div class="divider"><span>OR</span></div>
+
+        <div class="google-btn-wrapper">
+          <div id="google-login-btn"></div>
+        </div>
+
         <p class="hint">No account yet? <a routerLink="/signup">Create one</a></p>
       </div>
     </div>
@@ -63,8 +61,8 @@ import { AuthCode } from '../../core/error.codes';
   styles: [`
     .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .card { width: 100%; max-width: 400px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; }
-    h1 { margin: 0 0 4px 0; font-size: 22px; }
-    .subtitle { margin: 0 0 24px 0; color: var(--text-dim); }
+    h1 { margin: 0 0 4px 0; font-size: 22px; text-align: center; }
+    .subtitle { margin: 0 0 24px 0; color: var(--text-dim); text-align: center; font-size: 14px; }
     label { display: block; margin-bottom: 16px; }
     label span { display: block; margin-bottom: 6px; color: var(--text-dim); font-size: 13px; }
     button { width: 100%; padding: 12px; margin-top: 4px; }
@@ -86,24 +84,36 @@ import { AuthCode } from '../../core/error.codes';
       background: rgba(34, 197, 94, 0.15);
       border-color: rgba(34, 197, 94, 0.4);
     }
+    .divider {
+      display: flex; align-items: center; text-align: center;
+      margin: 20px 0; color: var(--text-dim); font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; border-bottom: 1px solid var(--border);
+    }
+    .divider:not(:empty)::before { margin-right: 12px; }
+    .divider:not(:empty)::after { margin-left: 12px; }
+    .google-btn-wrapper { display: flex; justify-content: center; margin: 12px 0 24px 0; min-height: 40px; }
     .hint { margin-top: 20px; font-size: 12px; color: var(--text-dim); text-align: center; }
     a { color: var(--text); }
+    @media (max-width: 480px) {
+      .wrap { padding: 12px; }
+      .card { padding: 24px 16px; }
+    }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit, AfterViewInit {
   private auth   = inject(AuthService);
   private router = inject(Router);
   private route  = inject(ActivatedRoute);
+  private ngZone = inject(NgZone);
 
   username = '';
   password = '';
   busy  = signal(false);
   error = signal<string | null>(null);
+  googleClientId = '';
 
-  /**
-   * Contextual banner derived from the `reason=` query param. Re-evaluated
-   * via a Signal so it reacts to route changes without a manual subscribe.
-   */
   banner = computed(() => {
     const reason = this.route.snapshot.queryParamMap.get('reason');
     switch (reason) {
@@ -119,7 +129,74 @@ export class LoginComponent {
     }
   });
 
-  submit() {
+  ngOnInit(): void {
+    this.auth.getAuthConfig().subscribe({
+      next: (config) => {
+        this.googleClientId = config.googleClientId;
+        this.initGoogleSignIn();
+      },
+      error: () => {
+        console.warn('Failed to load Google client ID config. Standard credentials only active.');
+      }
+    });
+  }
+
+  ngAfterViewInit(): void {
+    this.initGoogleSignIn();
+  }
+
+  private initGoogleSignIn(): void {
+    if (!this.googleClientId || typeof google === 'undefined') {
+      return;
+    }
+
+    google.accounts.id.initialize({
+      client_id: this.googleClientId,
+      callback: (response: any) => this.handleGoogleCredential(response.credential)
+    });
+
+    const btnEl = document.getElementById('google-login-btn');
+    if (btnEl) {
+      google.accounts.id.renderButton(btnEl, {
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        width: '300'
+      });
+    }
+  }
+
+  private handleGoogleCredential(credential: string): void {
+    this.ngZone.run(() => {
+      this.busy.set(true);
+      this.error.set(null);
+      this.auth.loginWithGoogle(credential).subscribe({
+        next: (res) => {
+          if (res && res.code === 'AUTH_GOOGLE_REGISTRATION_REQUIRED') {
+            sessionStorage.setItem('google_signup_email', res.email);
+            sessionStorage.setItem('google_signup_token', res.signupToken);
+            this.router.navigate(['/signup']);
+          } else {
+            this.router.navigate(['/dashboard']);
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.busy.set(false);
+          let message = 'Failed to sign in with Google.';
+          const body = err.error;
+          if (err.status === 403) {
+            message = 'Access denied. Sign-in is restricted to authorized email domains.';
+          } else if (body && typeof body === 'object' && body.message) {
+            message = body.message;
+          }
+          this.error.set(message);
+          setTimeout(() => this.initGoogleSignIn(), 500);
+        }
+      });
+    });
+  }
+
+  submit(): void {
     if (!this.username || !this.password) return;
     this.busy.set(true);
     this.error.set(null);
@@ -137,7 +214,7 @@ export class LoginComponent {
         else if (err.status === 0)           this.error.set('Gateway is unreachable. Check that the public API endpoint is reachable.');
         else if (err.status === 503 || err.status >= 500) this.error.set('Authentication is temporarily unavailable. Please try again shortly.');
         else                                  this.error.set('Sign-in failed. Please try again.');
-        // Clear the password field on credential failure for safety.
+        
         if (code === AuthCode.INVALID || err.status === 401) this.password = '';
       }
     });

@@ -75,6 +75,30 @@ export class AuthService {
     );
   }
 
+  getAuthConfig(): Observable<{ googleClientId: string }> {
+    return this.http.get<{ googleClientId: string }>('/auth/config');
+  }
+
+  loginWithGoogle(idToken: string): Observable<any> {
+    return this.http.post<any>(
+      '/auth/google',
+      { idToken },
+      { withCredentials: true, headers: this.deviceHeaders() }
+    ).pipe(tap(r => {
+      if (r && r.accessToken) {
+        this.adoptAccess(r.accessToken, r.expiresIn);
+      }
+    }));
+  }
+
+  completeGoogleSignup(payload: { username: string; password?: string; signupToken: string }): Observable<TokenResponse> {
+    return this.http.post<TokenResponse>(
+      '/auth/google/signup',
+      payload,
+      { withCredentials: true, headers: this.deviceHeaders() }
+    ).pipe(tap(r => this.adoptAccess(r.accessToken, r.expiresIn)));
+  }
+
   /**
    * Called on app boot and on 401/AUTH_001. Returns true when the silent
    * refresh succeeds; false when no refresh cookie is present, the cookie
