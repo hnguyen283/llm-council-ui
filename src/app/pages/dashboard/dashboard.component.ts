@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { JobsService, JobStatus } from '../../core/jobs.service';
@@ -37,6 +38,12 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
     </header>
 
     <main>
+      @if (userUsage()?.warningActive) {
+        <div class="user-quota-warning-banner" role="alert">
+          ⚠️ {{ userUsage()?.warningMessage }} (Remaining requests today: {{ userUsage()?.remainingRequests }})
+        </div>
+      }
+
       <section class="query-card">
         <label class="query-label">Research question</label>
         <textarea
@@ -132,7 +139,15 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
             @if (status()?.state === 'DONE') {
               <span class="superseded-badge">Superseded by full analysis</span>
             } @else {
-              <span class="running-badge pulsing">Based on previous research — full analysis running...</span>
+              @if (status()?.quickAnswerInfo; as info) {
+                @if (info.source === 'CACHE') {
+                  <span class="cached-badge">Cached answer from {{ formatDate(info.establishedAt) }}</span>
+                } @else {
+                  <span class="current-run-badge">Updated answer from current run</span>
+                }
+              } @else {
+                <span class="running-badge pulsing">Based on previous research — full analysis running...</span>
+              }
             }
           </button>
           
@@ -333,6 +348,24 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
     @keyframes running-pulse {
       0%, 100% { opacity: 0.85; }
       50% { opacity: 0.55; }
+    }
+    .cached-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+    }
+    .current-run-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #3b82f6;
+      background: rgba(59, 130, 246, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
     }
     .superseded-badge {
       font-size: 11px;
@@ -582,6 +615,22 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
       transform: scale(1.1);
     }
 
+    .user-quota-warning-banner {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid var(--amber);
+      color: #fcd34d;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      animation: banner-fade-in 0.3s ease-out;
+    }
+    @keyframes banner-fade-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Mobile: the dashboard is built around a 960px column with 32px
        padding and a fixed-layout table. Below ~640px those defaults
        overflow, so we shrink padding, stack the header, and let the
@@ -638,6 +687,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private auth = inject(AuthService);
   private router = inject(Router);
   private localeService = inject(LocaleService);
+  private http = inject(HttpClient);
+
+  userUsage = signal<any | null>(null);
+
+  loadUsage() {
+    this.http.get<any>('/me/usage', { withCredentials: true }).subscribe({
+      next: (data) => {
+        this.userUsage.set(data);
+      },
+      error: () => {
+        // Silently ignore to avoid interrupting user experience
+      }
+    });
+  }
   /**
    * Per-(userId, sid) snapshot of the user's most recent submission.
    * The dashboard hydrates from this on init and writes back to it on
@@ -652,6 +715,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly locales = LOCALES;
   query = '';
   status = signal<JobStatus | null>(null);
+  quickAnswerPriority = signal<number>(0);
   /**
    * Local generation id for the current Run click. Minted server-side
    * if the SPA forgets to provide one; we always provide one. Every
@@ -691,6 +755,74 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   toggleQuickAnswer() {
     this.userQuickAnswerExpanded.set(!this.quickAnswerExpanded());
+  }
+
+  formatDate(dateStr?: string | null): string {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString();
+    } catch {
+      return dateStr;
+    }
+  }
+
+  processQuickAnswerPriority(incoming: JobStatus | null): JobStatus | null {
+    if (!incoming) {
+      this.quickAnswerPriority.set(0);
+      return null;
+    }
+
+    // Clone incoming to avoid modifying original
+    const updated = { ...incoming };
+
+    // Try parsing legacy stringified JSON in quickAnswer
+    if (updated.quickAnswer && !updated.quickAnswerInfo) {
+      try {
+        const parsed = JSON.parse(updated.quickAnswer);
+        if (parsed && parsed.answer && parsed.artifactType && parsed.source) {
+          updated.quickAnswerInfo = parsed;
+          updated.quickAnswer = parsed.answer;
+        }
+      } catch (e) {
+        // Not JSON
+      }
+    }
+
+    const current = this.status();
+    if (!current) {
+      this.quickAnswerPriority.set(this.determinePriority(updated));
+      return updated;
+    }
+
+    const incomingPriority = this.determinePriority(updated);
+    const currentPriority = this.quickAnswerPriority();
+
+    if (incomingPriority >= currentPriority) {
+      this.quickAnswerPriority.set(incomingPriority);
+      return updated;
+    } else {
+      // Retain the higher priority quickAnswer and quickAnswerInfo
+      updated.quickAnswer = current.quickAnswer;
+      updated.quickAnswerInfo = current.quickAnswerInfo;
+      return updated;
+    }
+  }
+
+  private determinePriority(status: JobStatus): number {
+    if (status.quickAnswerInfo) {
+      const type = status.quickAnswerInfo.artifactType;
+      const source = status.quickAnswerInfo.source;
+      if (source === 'CURRENT_RUN') {
+        return type === 'A2' ? 400 : 300;
+      } else if (source === 'CACHE') {
+        return type === 'A2' ? 200 : 100;
+      }
+    }
+    if (status.quickAnswer) {
+      return 0; // Legacy raw string
+    }
+    return -1; // No quick answer
   }
 
   /**
@@ -808,7 +940,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isRunning()) return;
     this.cancelStream();
     this.query = item.query;
-    this.status.set(item.status);
+    this.status.set(null);
+    this.status.set(this.processQuickAnswerPriority(item.status));
     this.canceling.set(false);
     this.userQuickAnswerExpanded.set(null);
     this.updateCount.set(0);
@@ -1055,8 +1188,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         // Bump the visible update counter on every snapshot so the
         // user sees mid-stage pings even when `stage` stays the same.
         this.updateCount.update(n => n + 1);
-        this.status.set(status);
-        this.persistStatus(status);
+        const resolvedStatus = this.processQuickAnswerPriority(status);
+        this.status.set(resolvedStatus);
+        if (resolvedStatus) this.persistStatus(resolvedStatus);
         if (this.isTerminalState(status.state)) {
           this.clearReconnectTimer();
           // Stop the relative-time ticker on any terminal state so
@@ -1076,6 +1210,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             this.promptCache.save(userId, this.query, status, this.localeService.current());
             this.loadRecentQueriesList();
           }
+          this.loadUsage();
         }
       },
       error: err => {
@@ -1098,8 +1233,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
             if (this.activeJobId !== jobId) return;
             if (this.isTerminalState(status.state)) {
               // The job finished while we were disconnected/backgrounded!
-              this.status.set(status);
-              this.persistStatus(status);
+              const resolvedStatus = this.processQuickAnswerPriority(status);
+              this.status.set(resolvedStatus);
+              if (resolvedStatus) this.persistStatus(resolvedStatus);
               this.clearReconnectTimer();
               this.stopNowTicker();
               this.canceling.set(false);
@@ -1250,7 +1386,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.query = record.query;
     this.activeClientRequestId = record.clientRequestId;
-    this.status.set(record.status);
+    this.status.set(this.processQuickAnswerPriority(record.status));
     this.updateCount.set(0);
 
     if (this.isTerminalState(record.status.state)) {
@@ -1258,6 +1394,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       // without any backend traffic. activeJobId stays null so the
       // next Run click does not try to supersede a finished job.
       this.activeJobId = null;
+      this.loadUsage();
       return;
     }
 
@@ -1333,6 +1470,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     document.addEventListener('visibilitychange', this.visibilityHandler);
     this.hydrateFromCache();
     this.loadRecentQueriesList();
+    this.loadUsage();
   }
 
   /** Tears down stream + interval when the component is destroyed. */

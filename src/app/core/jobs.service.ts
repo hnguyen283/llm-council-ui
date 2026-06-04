@@ -68,6 +68,17 @@ export type JobState =
   | 'CANCEL_REQUESTED'
   | 'CANCELED';
 
+export interface QuickAnswerInfo {
+  answer: string;
+  artifactType: 'A1' | 'A2';
+  source: 'CACHE' | 'CURRENT_RUN';
+  standardizedPromptKey?: string;
+  artifactCreatedAt?: string;
+  establishedAt?: string;
+  jobId: string;
+  version: number;
+}
+
 /** Snapshot returned by both the polling and the streaming endpoints. */
 export interface JobStatus {
   jobId: string;
@@ -77,6 +88,7 @@ export interface JobStatus {
   result: FinalReport | null;
   error: string | null;
   quickAnswer?: string | null;
+  quickAnswerInfo?: QuickAnswerInfo | null;
 }
 
 /**
