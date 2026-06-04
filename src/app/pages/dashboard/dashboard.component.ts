@@ -142,8 +142,10 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
               @if (status()?.quickAnswerInfo; as info) {
                 @if (info.source === 'CACHE') {
                   <span class="cached-badge">Cached answer from {{ formatDate(info.establishedAt) }}</span>
+                } @else if (info.artifactType === 'A2') {
+                  <span class="current-run-badge">Enhanced answer from current research</span>
                 } @else {
-                  <span class="current-run-badge">Updated answer from current run</span>
+                  <span class="current-run-badge">Updated answer from current research</span>
                 }
               } @else {
                 <span class="running-badge pulsing">Based on previous research — full analysis running...</span>
@@ -989,6 +991,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     this.cancelStream();
     this.status.set(null);
+    this.quickAnswerPriority.set(0);
     this.canceling.set(false);
     this.keyFindingsOpen.set(false);
     this.userQuickAnswerExpanded.set(null);
@@ -1090,6 +1093,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isRunning()) return;
     this.cancelStream();
     this.status.set(null);
+    this.quickAnswerPriority.set(0);
     this.canceling.set(false);
     this.userQuickAnswerExpanded.set(null);
     this.activeJobId = null;
