@@ -14,6 +14,7 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
 import { HistorySidebarComponent } from './components/history-sidebar.component';
 import { QuickAnswerCardComponent } from './components/quick-answer-card.component';
 import { RequestDetailsAccordionComponent, StageTiming } from './components/request-details-accordion.component';
+import { UsageService } from '../../core/usage.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -34,12 +35,15 @@ import { RequestDetailsAccordionComponent, StageTiming } from './components/requ
         [username]="username()"
         [email]="email()"
         [loginMethod]="loginMethod()"
-        [usage]="userUsage()"
+        [usage]="usageService.usage()"
+        [loading]="usageService.loading()"
+        [error]="usageService.error()"
         [locale]="locale()"
         [locales]="locales"
         (selectQuery)="loadRecentQuery($event)"
         (setLocale)="setLocale($event)"
         (logout)="logout()"
+        (loadUsage)="usageService.loadUsage()"
       ></app-history-sidebar>
 
       <!-- Main Viewport containing Header & Content -->
@@ -62,9 +66,9 @@ import { RequestDetailsAccordionComponent, StageTiming } from './components/requ
 
         <!-- Main Content Area -->
         <main id="main-content" class="main-panel">
-          @if (userUsage()?.warningActive) {
+          @if (usageService.usage()?.warningActive) {
             <div class="user-quota-warning-banner" role="alert">
-              ⚠️ {{ userUsage()?.warningMessage }} (Remaining requests today: {{ userUsage()?.remainingRequests }})
+              ⚠️ {{ usageService.usage()?.warningMessage }} (Remaining requests today: {{ usageService.usage()?.remainingRequests }})
             </div>
           }
 
@@ -568,6 +572,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private storage = inject(JobSessionStorageService);
   private promptCache = inject(PromptCacheService);
+  readonly usageService = inject(UsageService);
 
   // Shell open/close states
   historyOpen = signal(false);
@@ -580,7 +585,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // Developer mode isolate
   debugMode = signal(false);
 
-  userUsage = signal<any | null>(null);
   recentQueries = signal<PromptCacheEntry[]>([]);
   readonly locales = LOCALES;
   query = '';
@@ -689,12 +693,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadUsage() {
-    this.http.get<any>('/me/usage', { withCredentials: true }).subscribe({
-      next: (data) => {
-        this.userUsage.set(data);
-      },
-      error: () => {}
-    });
+    this.usageService.loadUsage();
   }
 
   setLocale(code: string) {

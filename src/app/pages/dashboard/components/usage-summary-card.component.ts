@@ -1,52 +1,54 @@
 import { Component, input, computed } from '@angular/core';
-
-export interface UserUsage {
-  limitRequests: number;
-  currentRequests: number;
-  remainingRequests: number;
-  limitCostMicros: number;
-  currentCostMicros: number;
-  remainingCostMicros: number;
-  warningActive: boolean;
-  warningMessage: string | null;
-}
+import { UserUsage } from '../../../core/usage.service';
 
 @Component({
   selector: 'app-usage-summary-card',
   standalone: true,
   template: `
-    @if (usage(); as u) {
-      <div class="usage-card" role="region" aria-label="Usage details">
-        <h3>Usage Overview</h3>
-        <div class="metrics-grid">
-          <div class="metric-item">
-            <span class="label">Requests Used Today</span>
-            <span class="value">{{ u.currentRequests }} / {{ u.limitRequests }}</span>
-            <div class="progress-bar">
-              <div class="fill" [style.width.%]="requestPercent()"></div>
-            </div>
-          </div>
-          
-          <div class="metric-item">
-            <span class="label">Estimated Cost</span>
-            <span class="value">{{ formattedCost() }}</span>
-          </div>
-
-          <div class="metric-item">
-            <span class="label">Remaining Budget</span>
-            <span class="value">{{ formattedRemaining() }}</span>
-            <div class="progress-bar">
-              <div class="fill green" [style.width.%]="costPercentRemaining()"></div>
-            </div>
-          </div>
-        </div>
-
-        @if (u.warningActive && u.warningMessage) {
-          <div class="warning-banner" role="alert">
-            ⚠️ {{ u.warningMessage }}
-          </div>
-        }
+    @if (loading()) {
+      <div class="usage-status" role="status">
+        <span class="spinner"></span> Loading usage...
       </div>
+    } @else if (error()) {
+      <div class="usage-status error" role="alert">
+        ⚠️ {{ error() }}
+      </div>
+    } @else if (!usage()) {
+      <div class="usage-status">No usage data yet</div>
+    } @else {
+      @if (usage(); as u) {
+        <div class="usage-card" role="region" aria-label="Usage details">
+          <h3>Usage Overview</h3>
+          <div class="metrics-grid">
+            <div class="metric-item">
+              <span class="label">Requests Used Today</span>
+              <span class="value">{{ u.currentRequests }} / {{ u.limitRequests }}</span>
+              <div class="progress-bar">
+                <div class="fill" [style.width.%]="requestPercent()"></div>
+              </div>
+            </div>
+            
+            <div class="metric-item">
+              <span class="label">Estimated Cost</span>
+              <span class="value">{{ formattedCost() }}</span>
+            </div>
+
+            <div class="metric-item">
+              <span class="label">Remaining Budget</span>
+              <span class="value">{{ formattedRemaining() }}</span>
+              <div class="progress-bar">
+                <div class="fill green" [style.width.%]="costPercentRemaining()"></div>
+              </div>
+            </div>
+          </div>
+
+          @if (u.warningActive && u.warningMessage) {
+            <div class="warning-banner" role="alert">
+              ⚠️ {{ u.warningMessage }}
+            </div>
+          }
+        </div>
+      }
     }
   `,
   styles: [`
@@ -112,10 +114,40 @@ export interface UserUsage {
       font-size: 12px;
       font-weight: 500;
     }
+    .usage-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      font-size: 13px;
+      color: var(--text-dim);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+    }
+    .usage-status.error {
+      color: var(--red);
+      background: rgba(239, 68, 68, 0.05);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   `]
 })
 export class UsageSummaryCardComponent {
   readonly usage = input<UserUsage | null>(null);
+  readonly loading = input<boolean>(false);
+  readonly error = input<string | null>(null);
 
   readonly requestPercent = computed(() => {
     const u = this.usage();

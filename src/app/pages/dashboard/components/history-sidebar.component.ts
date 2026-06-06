@@ -1,10 +1,11 @@
-import { Component, input, output, model, signal, computed, HostListener } from '@angular/core';
+import { Component, input, output, model, signal, computed, HostListener, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PromptCacheEntry } from '../../../core/prompt-cache.service';
 import { LOCALES } from '../../../core/locale.service';
 import { PasswordChangeFormComponent } from './password-change-form.component';
-import { UsageSummaryCardComponent, UserUsage } from './usage-summary-card.component';
+import { UsageSummaryCardComponent } from './usage-summary-card.component';
+import { UserUsage } from '../../../core/usage.service';
 
 @Component({
   selector: 'app-history-sidebar',
@@ -132,7 +133,11 @@ import { UsageSummaryCardComponent, UserUsage } from './usage-summary-card.compo
           </button>
           @if (usageExpanded()) {
             <div class="footer-collapsible-content">
-              <app-usage-summary-card [usage]="usage()"></app-usage-summary-card>
+              <app-usage-summary-card
+                [usage]="usage()"
+                [loading]="loading()"
+                [error]="error()"
+              ></app-usage-summary-card>
             </div>
           }
         </div>
@@ -556,6 +561,8 @@ export class HistorySidebarComponent {
   email = input<string | null>('');
   loginMethod = input<string | null>('');
   usage = input<UserUsage | null>(null);
+  loading = input<boolean>(false);
+  error = input<string | null>(null);
   locale = input<string>('');
   locales = input<any[]>([]);
 
@@ -564,6 +571,7 @@ export class HistorySidebarComponent {
   close = output<void>();
   setLocale = output<string>();
   logout = output<void>();
+  loadUsage = output<void>();
 
   searchQuery = '';
   selectedStatus = 'ALL';
@@ -571,6 +579,14 @@ export class HistorySidebarComponent {
   // Footer collapsible states
   usageExpanded = signal(false);
   settingsExpanded = signal(false);
+
+  constructor() {
+    effect(() => {
+      if (this.isOpen() && this.usageExpanded()) {
+        this.loadUsage.emit();
+      }
+    });
+  }
 
   @HostListener('document:keydown.escape', ['$event'])
   handleEscapeKey() {

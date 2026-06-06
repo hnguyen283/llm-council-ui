@@ -19,6 +19,7 @@ const common = {
 
 module.exports = {
   '/auth': common,
+  '/me': common,
   '/jobs': {
     ...common,
     timeout: 900000,
