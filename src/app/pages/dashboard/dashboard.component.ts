@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
@@ -10,287 +10,306 @@ import { LOCALES, LocaleCode, LocaleService } from '../../core/locale.service';
 import { DirectAnswerComponent } from './direct-answer.component';
 import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.service';
 
+// Decomposed components
+import { HistorySidebarComponent } from './components/history-sidebar.component';
+import { QuickAnswerCardComponent } from './components/quick-answer-card.component';
+import { RequestDetailsAccordionComponent, StageTiming } from './components/request-details-accordion.component';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [FormsModule, DirectAnswerComponent],
+  imports: [
+    FormsModule,
+    DirectAnswerComponent,
+    HistorySidebarComponent,
+    QuickAnswerCardComponent,
+    RequestDetailsAccordionComponent
+  ],
   template: `
-    <header>
-      <div class="brand">LLM Council</div>
-      <div class="header-actions">
-        <div class="lang-switcher" role="group" aria-label="Language">
-          @for (l of locales; track l.code) {
-            <button
-              type="button"
-              class="lang-btn"
-              [class.active]="locale() === l.code"
+    <div class="dashboard-shell">
+      <!-- Left History Sidebar -->
+      <app-history-sidebar
+        [recentQueries]="recentQueries()"
+        [(isOpen)]="historyOpen"
+        [username]="username()"
+        [email]="email()"
+        [loginMethod]="loginMethod()"
+        [usage]="userUsage()"
+        [locale]="locale()"
+        [locales]="locales"
+        (selectQuery)="loadRecentQuery($event)"
+        (setLocale)="setLocale($event)"
+        (logout)="logout()"
+      ></app-history-sidebar>
+
+      <!-- Main Viewport containing Header & Content -->
+      <div class="main-viewport">
+        <header role="banner">
+          <div class="header-left">
+            <button 
+              type="button" 
+              class="icon-btn menu-btn" 
+              (click)="historyOpen.set(true)" 
+              aria-label="Open research history"
+              [attr.aria-expanded]="historyOpen()"
+              aria-controls="history-drawer"
+            >
+              ☰
+            </button>
+            <div class="brand">LLM Council</div>
+          </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="main-panel">
+          @if (userUsage()?.warningActive) {
+            <div class="user-quota-warning-banner" role="alert">
+              ⚠️ {{ userUsage()?.warningMessage }} (Remaining requests today: {{ userUsage()?.remainingRequests }})
+            </div>
+          }
+
+          <!-- Query Input Section -->
+          <section class="query-card">
+            <label class="query-label" for="prompt-textarea">Research question</label>
+            <textarea
+              id="prompt-textarea"
+              [(ngModel)]="query"
+              rows="2"
+              placeholder="e.g. Is intermittent fasting effective for weight loss?"
               [disabled]="isRunning()"
-              [attr.aria-pressed]="locale() === l.code"
-              [title]="l.label"
-              (click)="setLocale(l.code)"
-            >
-              {{ l.short }}
-            </button>
-          }
-        </div>
-        <button (click)="logout()">Logout</button>
-      </div>
-    </header>
-
-    <main>
-      @if (userUsage()?.warningActive) {
-        <div class="user-quota-warning-banner" role="alert">
-          ⚠️ {{ userUsage()?.warningMessage }} (Remaining requests today: {{ userUsage()?.remainingRequests }})
-        </div>
-      }
-
-      <section class="query-card">
-        <label class="query-label">Research question</label>
-        <textarea
-          [(ngModel)]="query"
-          rows="2"
-          placeholder="e.g. Is intermittent fasting effective for weight loss?"
-          [disabled]="isRunning()"
-        ></textarea>
-        <div class="actions">
-          <button
-            class="primary"
-            (click)="run()"
-            [disabled]="!query.trim() || isRunning()"
-          >
-            {{ isRunning() ? 'Running...' : 'Run research' }}
-          </button>
-          @if (isRunning() && hasActiveJob()) {
-            <button
-              type="button"
-              class="cancel"
-              (click)="cancel()"
-              [disabled]="canceling()"
-            >
-              {{ canceling() ? 'Canceling...' : 'Cancel' }}
-            </button>
-          }
-          @if (status() && !isRunning()) {
-            <button (click)="reset()">Clear</button>
-          }
-          <span class="lang-hint">Prompts in {{ activeLocaleLabel() }}</span>
-        </div>
-      </section>
-
-      @if (recentQueries().length > 0) {
-        <section class="recent-queries-card">
-          <h3>Recent Research</h3>
-          <div class="recent-queries-list">
-            @for (item of recentQueries(); track item.query) {
+            ></textarea>
+            
+            <div class="actions">
               <button
-                type="button"
-                class="recent-query-item"
-                [disabled]="isRunning()"
-                (click)="loadRecentQuery(item)"
+                class="primary"
+                (click)="run()"
+                [disabled]="!query.trim() || isRunning()"
               >
-                <div class="recent-query-content">
-                  <span class="recent-query-text">{{ item.query }}</span>
-                  <span class="recent-query-meta">
-                    {{ activeLocaleLabelOf(item.locale) }} &bull; {{ timeSinceTimestamp(item.timestamp) }}
-                  </span>
-                </div>
-                <span class="recent-query-arrow">&rarr;</span>
+                {{ isRunning() ? 'Running...' : 'Run research' }}
               </button>
-            }
-          </div>
-        </section>
-      }
+              
+              @if (isRunning() && hasActiveJob()) {
+                <button
+                  type="button"
+                  class="cancel"
+                  (click)="cancel()"
+                  [disabled]="canceling()"
+                >
+                  {{ canceling() ? 'Canceling...' : 'Cancel' }}
+                </button>
+              }
+              
+              @if (status() && !isRunning()) {
+                <button (click)="reset()">Clear</button>
+              }
+              
+              <span class="lang-hint">Prompts in {{ activeLocaleLabel() }}</span>
+            </div>
+          </section>
 
-      @if (status(); as s) {
-        <section class="progress-card">
-          <div class="meta">
-            <h2>Progress</h2>
-            <span
-              class="state state-{{ s.state.toLowerCase() }}"
-              [class.pulsing]="s.state === 'RUNNING' || s.state === 'PENDING' || s.state === 'CANCEL_REQUESTED'"
-            >{{ s.state }}</span>
-            <span class="stage-text" aria-live="polite">{{ s.stage }}</span>
-            <span class="stage-meta">
-              <span class="update-count" [title]="'Backend updates received: ' + updateCount()">
-                #{{ updateCount() }}
-              </span>
-              <span class="time-since" [title]="'Last backend update: ' + s.updatedAt">
-                {{ timeSinceUpdate() }}
-              </span>
-            </span>
-          </div>
-          @if (s.error) {
-            <div class="error">{{ s.error }}</div>
+          <!-- Job Progress Status -->
+          @if (status(); as s) {
+            <section class="progress-card">
+              <div class="meta">
+                <h2>Progress</h2>
+                <span
+                  class="state state-{{ s.state.toLowerCase() }}"
+                  [class.pulsing]="s.state === 'RUNNING' || s.state === 'PENDING' || s.state === 'CANCEL_REQUESTED'"
+                >
+                  {{ getStatusLabel(s.state) }}
+                </span>
+                
+                <span class="stage-text" aria-live="polite">{{ s.stage }}</span>
+                
+                <span class="stage-meta">
+                  <span class="update-count" [title]="'Backend updates received: ' + updateCount()">
+                    #{{ updateCount() }}
+                  </span>
+                  
+                  @if (isRunning()) {
+                    <span class="total-time" aria-live="off">
+                      Time: {{ runningTotalTimeText() }}
+                    </span>
+                  } @else if (s.state === 'DONE' && totalTimeText()) {
+                    <span class="total-time">
+                      Total Time: {{ totalTimeText() }}
+                    </span>
+                  }
+                </span>
+              </div>
+              
+              @if (s.error) {
+                <div class="error" role="alert">{{ s.error }}</div>
+              }
+            </section>
           }
-        </section>
-      }
 
-      @if (status()?.quickAnswer; as qa) {
-        <section class="quick-answer-card">
-          <button
-            type="button"
-            class="collapsible-header"
-            [attr.aria-expanded]="quickAnswerExpanded()"
-            (click)="toggleQuickAnswer()"
-          >
-            <span class="chevron" [class.open]="quickAnswerExpanded()" aria-hidden="true">&#9656;</span>
-            <span class="lightning-bolt">⚡</span>
-            <h3 style="margin: 0 8px 0 4px; display: inline-block;">Quick Answer</h3>
-            @if (status()?.state === 'DONE') {
-              <span class="superseded-badge">Superseded by full analysis</span>
-            } @else {
-              @if (status()?.quickAnswerInfo; as info) {
-                @if (info.source === 'CACHE') {
-                  <span class="cached-badge">Cached answer from {{ formatDate(info.establishedAt) }}</span>
-                } @else if (info.artifactType === 'A2') {
-                  <span class="current-run-badge">Enhanced answer from current research</span>
+          <!-- Quick Answer Card -->
+          <app-quick-answer-card [status]="status()"></app-quick-answer-card>
+
+          <!-- Final Answer Card -->
+          @if (status()?.result; as report) {
+            <app-direct-answer [report]="report" />
+
+            <section class="report">
+              <div class="report-header">
+                <h2>Final report</h2>
+                <span class="confidence confidence-{{ report.confidence.toLowerCase() }}">
+                  {{ report.confidence }} confidence
+                </span>
+              </div>
+
+              @if (report.degradationNotes && report.degradationNotes.length > 0) {
+                <div class="pipeline-notes" role="status">
+                  <h3>Run notes</h3>
+                  <ul>
+                    @for (note of report.degradationNotes; track note) {
+                      <li>{{ note }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <div class="block">
+                <h3>Conflicts &amp; contradictions</h3>
+                @if (report.conflicts.length === 0) {
+                  <p class="dim">None detected.</p>
                 } @else {
-                  <span class="current-run-badge">Updated answer from current research</span>
+                  <ul>
+                    @for (c of report.conflicts; track c) { <li>{{ c }}</li> }
+                  </ul>
                 }
-              } @else {
-                <span class="running-badge pulsing">Based on previous research — full analysis running...</span>
-              }
-            }
-          </button>
-          
-          @if (quickAnswerExpanded()) {
-            <div class="quick-answer-content" style="margin-top: 12px; line-height: 1.6; font-size: 14px;">
-              <p style="margin: 0;">{{ qa }}</p>
-            </div>
-          }
-        </section>
-      }
-
-      @if (status()?.result; as report) {
-        <!-- Post-judge synthesised one-paragraph answer. The panel
-             hides itself when synthesis was skipped, errored, or
-             returned blank, so the dashboard layout stays clean for
-             degraded runs. -->
-        <app-direct-answer [report]="report" />
-
-        <section class="report">
-          <div class="report-header">
-            <h2>Final report</h2>
-            <span class="confidence confidence-{{ report.confidence.toLowerCase() }}">
-              {{ report.confidence }} confidence
-            </span>
-          </div>
-
-          @if (report.degradationNotes && report.degradationNotes.length > 0) {
-            <div class="pipeline-notes" role="status">
-              <h3>Run notes</h3>
-              <ul>
-                @for (note of report.degradationNotes; track note) {
-                  <li>{{ note }}</li>
-                }
-              </ul>
-            </div>
+              </div>
+            </section>
           }
 
-          <div class="block">
-            <h3>Conflicts &amp; contradictions</h3>
-            @if (report.conflicts.length === 0) {
-              <p class="dim">None detected.</p>
-            } @else {
-              <ul>
-                @for (c of report.conflicts; track c) { <li>{{ c }}</li> }
-              </ul>
-            }
-          </div>
-
-          <div class="block">
-            <button
-              type="button"
-              class="collapsible-header"
-              [attr.aria-expanded]="keyFindingsOpen()"
-              (click)="toggleKeyFindings()"
-            >
-              <span class="chevron" [class.open]="keyFindingsOpen()" aria-hidden="true">&#9656;</span>
-              <h3>Key findings ({{ report.keyFindings.length }})</h3>
-            </button>
-            @if (keyFindingsOpen()) {
-              @if (report.keyFindings.length === 0) {
-                <p class="dim">No findings produced.</p>
-              } @else {
-                <ul>
-                  @for (f of report.keyFindings; track f) { <li>{{ f }}</li> }
-                </ul>
-              }
-            }
-          </div>
-
-          <div class="block">
-            <h3>Sources ({{ report.sources.length }})</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Tier</th>
-                  <th>Score</th>
-                  <th>URL</th>
-                  <th>Rationale</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (src of report.sources; track src.url) {
-                  <tr>
-                    <td><span class="tier tier-{{ tierClass(src.reliability) }}">{{ src.reliability }}</span></td>
-                    <td>
-                      <div class="score" [title]="src.rationale || ''">
-                        <span class="score-num score-{{ scoreBand(src.confidenceScore) }}">{{ src.confidenceScore }}</span>
-                        <div class="score-bar">
-                          <div class="score-bar-fill score-{{ scoreBand(src.confidenceScore) }}"
-                               [style.width.%]="src.confidenceScore"></div>
-                        </div>
-                      </div>
-                    </td>
-                    <td><a [href]="src.url" target="_blank" rel="noopener">{{ shortUrl(src.url) }}</a></td>
-                    <td>{{ src.rationale || src.summary }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </section>
-      }
-    </main>
+          <!-- Details Accordion (always rendered if status exists, handles collapse inside) -->
+          @if (status()) {
+            <app-request-details-accordion
+              [status]="status()"
+              [compactMode]="false"
+              [timings]="stageTimings()"
+              [debugMode]="debugMode()"
+            ></app-request-details-accordion>
+          }
+        </main>
+      </div>
+    </div>
   `,
   styles: [`
+    .dashboard-shell {
+      display: flex;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+
+    .main-viewport {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 32px;
+      padding: 10px 20px;
       border-bottom: 1px solid var(--border);
       background: var(--bg-elev);
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
-    .brand { font-weight: 600; font-size: 16px; }
-    .header-actions { display: flex; align-items: center; gap: 12px; }
 
-    .lang-switcher {
-      display: inline-flex;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: var(--bg);
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
-    .lang-btn {
-      padding: 4px 10px;
-      font-size: 12px;
-      font-weight: 600;
+
+    .brand {
+      font-weight: 700;
+      font-size: 16px;
       letter-spacing: 0.5px;
-      color: var(--text-dim);
+      background: linear-gradient(135deg, var(--text) 30%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .icon-btn {
       background: transparent;
       border: none;
-      border-right: 1px solid var(--border);
+      font-size: 20px;
+      color: var(--text-dim);
       cursor: pointer;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: color 0.15s, background-color 0.15s;
     }
-    .lang-btn:last-child { border-right: none; }
-    .lang-btn:hover:not(:disabled) { color: var(--text); }
-    .lang-btn.active {
-      background: rgba(59, 130, 246, 0.15);
-      color: var(--accent);
+
+    .icon-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
     }
-    .lang-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .menu-btn {
+      display: flex;
+    }
+
+    /* Main panel spacing - Reduced Visual Density */
+    .main-panel {
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .query-card {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    /* Flatter layout - Removed redundant card borders/backgrounds */
+    .progress-card, .report {
+      background: transparent;
+      border: none;
+      padding: 0 10px;
+    }
+
+    .query-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-dim);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+      font-size: 16px; /* Base size >=16px avoids auto-zoom on iOS */
+      line-height: 1.5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     .lang-hint {
       margin-left: auto;
       align-self: center;
@@ -298,327 +317,185 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
       color: var(--text-dim);
     }
 
-    main {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 32px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
+    button.primary {
+      height: 44px;
+      padding: 0 20px;
+      font-weight: 600;
     }
 
-    .query-card, .progress-card, .report {
-      background: var(--bg-elev);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
-    }
-    .quick-answer-card {
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(147, 51, 234, 0.08) 100%);
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      border-radius: var(--radius);
-      padding: 24px;
-      margin-top: 16px;
-      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.05);
-      transition: all 0.3s ease;
-    }
-    .quick-answer-card:hover {
-      box-shadow: 0 6px 24px rgba(59, 130, 246, 0.08);
-      border-color: rgba(59, 130, 246, 0.4);
-    }
-    .lightning-bolt {
-      font-size: 16px;
-      color: var(--amber);
-      animation: lightning-glow 2s infinite alternate;
-    }
-    @keyframes lightning-glow {
-      from { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.2)); }
-      to { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7)); }
-    }
-    .running-badge {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--accent);
-      background: rgba(59, 130, 246, 0.15);
-      padding: 2px 8px;
-      border-radius: 4px;
-      letter-spacing: 0.3px;
-    }
-    .running-badge.pulsing {
-      animation: running-pulse 2s infinite;
-    }
-    @keyframes running-pulse {
-      0%, 100% { opacity: 0.85; }
-      50% { opacity: 0.55; }
-    }
-    .cached-badge {
-      font-size: 11px;
-      font-weight: 600;
-      color: #10b981;
-      background: rgba(16, 185, 129, 0.15);
-      padding: 2px 8px;
-      border-radius: 4px;
-      letter-spacing: 0.3px;
-    }
-    .current-run-badge {
-      font-size: 11px;
-      font-weight: 600;
-      color: #3b82f6;
-      background: rgba(59, 130, 246, 0.15);
-      padding: 2px 8px;
-      border-radius: 4px;
-      letter-spacing: 0.3px;
-    }
-    .superseded-badge {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-dim);
-      background: rgba(148, 163, 184, 0.15);
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    .query-label { display: block; margin-bottom: 8px; color: var(--text-dim); font-size: 13px; }
-    textarea { resize: vertical; min-height: 60px; }
-    .actions { display: flex; gap: 8px; margin-top: 12px; align-items: center; }
-    /* The Cancel button stands apart from Clear (which is destructive
-       only locally): it triggers a backend mutation. Amber matches the
-       CANCEL_REQUESTED badge so the connection between "I clicked
-       Cancel" and "state went amber" is visually obvious. */
     button.cancel {
       background: transparent;
       color: var(--amber);
       border: 1px solid var(--amber);
+      height: 44px;
+      padding: 0 20px;
+      font-weight: 600;
     }
-    button.cancel:hover:not(:disabled) { background: rgba(245,158,11,0.1); }
-    button.cancel:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    h2 { margin: 0 0 16px 0; font-size: 16px; }
-    h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--text-dim); }
-    .dim { color: var(--text-dim); margin: 0; }
+    button.cancel:hover:not(:disabled) {
+      background: rgba(245, 158, 11, 0.1);
+    }
 
+    /* Progress States */
     .meta {
       display: flex;
       gap: 12px;
       align-items: center;
       font-size: 13px;
+      flex-wrap: wrap;
     }
-    .meta h2 { margin: 0; }
-    .state {
+
+    .meta h2 {
+      margin: 0;
+      font-size: 15px;
       font-weight: 600;
+    }
+
+    .state {
+      font-weight: 700;
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 11px;
       letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
-    .state-pending           { background: rgba(148,163,184,0.15); color: var(--text-dim); }
-    .state-running           { background: rgba(59,130,246,0.15);  color: var(--accent); }
-    .state-done              { background: rgba(16,185,129,0.15);  color: var(--green); }
-    .state-failed            { background: rgba(239,68,68,0.15);   color: var(--red); }
-    /* CANCEL_REQUESTED is transient — amber to signal "in flight but
-       winding down". CANCELED is a calm grey terminal, distinct from
-       FAILED's red so the user can tell intentional stops apart from
-       errors. The class names come from s.state.toLowerCase(). */
-    .state-cancel_requested  { background: rgba(245,158,11,0.15);  color: var(--amber); }
-    .state-canceled          { background: rgba(148,163,184,0.20); color: var(--text-dim); }
-    /* Subtle pulse on the badge while the workflow is in flight so the
-       user has a visual cue that the connection is alive even between
-       stage transitions. */
-    .state.pulsing { animation: state-pulse 1.6s ease-in-out infinite; }
+
+    .state-pending           { background: rgba(148, 163, 184, 0.12); color: var(--text-dim); }
+    .state-running           { background: rgba(59, 130, 246, 0.12);  color: var(--accent); }
+    .state-done              { background: rgba(16, 185, 129, 0.12);  color: var(--green); }
+    .state-failed            { background: rgba(239, 68, 68, 0.12);   color: var(--red); }
+    .state-cancel_requested  { background: rgba(245, 158, 11, 0.12);  color: var(--amber); }
+    .state-canceled          { background: rgba(148, 163, 184, 0.16); color: var(--text-dim); }
+
+    .state.pulsing {
+      animation: state-pulse 1.6s ease-in-out infinite;
+    }
+
     @keyframes state-pulse {
       0%, 100% { opacity: 1; }
-      50%      { opacity: 0.55; }
+      50%      { opacity: 0.6; }
     }
+
     .stage-text {
       color: var(--text);
-      font-weight: 500;
+      font-weight: 600;
+      text-transform: capitalize;
     }
+
     .stage-meta {
       margin-left: auto;
       display: inline-flex;
-      gap: 8px;
+      align-items: center;
+      gap: 12px;
       color: var(--text-dim);
       font-size: 12px;
       font-variant-numeric: tabular-nums;
     }
+
     .update-count {
       padding: 1px 6px;
       border-radius: 4px;
-      background: rgba(148,163,184,0.12);
+      background: rgba(148, 163, 184, 0.1);
     }
+
+    .total-time {
+      font-weight: 600;
+      color: var(--text);
+    }
+
     .error {
       margin-top: 12px;
       padding: 10px 12px;
-      background: rgba(239,68,68,0.1);
+      background: rgba(239, 68, 68, 0.1);
       border: 1px solid var(--red);
       color: var(--red);
       border-radius: var(--radius);
       font-size: 13px;
     }
 
-    /* Report */
-    .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .report-header h2 { margin: 0; }
-    .confidence {
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+    /* Final Report */
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
-    .confidence-high   { background: rgba(16,185,129,0.15); color: var(--green); }
-    .confidence-medium { background: rgba(245,158,11,0.15); color: var(--amber); }
-    .confidence-low    { background: rgba(239,68,68,0.15); color: var(--red); }
+
+    .report-header h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .confidence {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .confidence-high   { background: rgba(16, 185, 129, 0.12); color: var(--green); }
+    .confidence-medium { background: rgba(245, 158, 11, 0.12); color: var(--amber); }
+    .confidence-low    { background: rgba(239, 68, 68, 0.12); color: var(--red); }
+
     .pipeline-notes {
-      margin: 12px 0 4px 0;
-      padding: 12px 14px;
+      margin: 12px 0;
+      padding: 10px 12px;
       border-left: 3px solid var(--amber);
-      background: rgba(245,158,11,0.10);
+      background: rgba(245, 158, 11, 0.06);
       border-radius: var(--radius);
     }
+
     .pipeline-notes h3 {
       color: var(--amber);
-      margin-bottom: 6px;
+      margin: 0 0 6px 0;
+      font-size: 13px;
     }
+
     .pipeline-notes ul {
       margin: 0;
       padding-left: 18px;
+      font-size: 13px;
     }
+
     .pipeline-notes li {
       margin-bottom: 4px;
     }
 
-    .block { margin-top: 20px; }
-    ul { margin: 0; padding-left: 20px; }
-    li { margin-bottom: 6px; line-height: 1.5; }
-
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { color: var(--text-dim); font-weight: 500; font-size: 12px; }
-
-    .tier {
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      white-space: nowrap;
+    .block {
+      margin-top: 14px;
     }
-    .tier-1 { background: rgba(16,185,129,0.15); color: var(--green); }
-    .tier-2 { background: rgba(59,130,246,0.15); color: var(--accent); }
-    .tier-3 { background: rgba(148,163,184,0.15); color: var(--text-dim); }
 
-    /* Per-source confidence visual: numeric score plus a proportional
-       bar; the full rationale surfaces in a tooltip via the title
-       attribute on the wrapper element. */
-    .score { display: flex; align-items: center; gap: 8px; min-width: 100px; }
-    .score-num { font-weight: 600; font-size: 12px; min-width: 28px; text-align: right; }
-    .score-bar {
-      flex: 1;
-      height: 6px;
-      background: var(--border);
-      border-radius: 3px;
-      overflow: hidden;
-      min-width: 60px;
-    }
-    .score-bar-fill { height: 100%; transition: width 0.3s ease; }
-    .score-high   { color: var(--green); background: var(--green); }
-    .score-medium { color: var(--accent); background: var(--accent); }
-    .score-low    { color: var(--red); background: var(--red); }
-    .score-num.score-high   { color: var(--green); background: transparent; }
-    .score-num.score-medium { color: var(--accent); background: transparent; }
-    .score-num.score-low    { color: var(--red); background: transparent; }
-
-    /* Collapsible block header (used by "Key findings"). The whole
-       header is a button so the chevron and the title are part of one
-       click target — keeps the keyboard/screen-reader experience
-       coherent without needing extra ARIA wiring. */
-    .collapsible-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 0;
-      margin: 0 0 8px 0;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      text-align: left;
-    }
-    .collapsible-header:hover:not(:disabled) { background: transparent; }
-    .collapsible-header h3 { margin: 0; }
-    .chevron {
-      display: inline-block;
-      color: var(--text-dim);
-      transition: transform 0.15s ease;
-      font-size: 12px;
-      line-height: 1;
-    }
-    .chevron.open { transform: rotate(90deg); }
-
-    .recent-queries-card {
-      background: var(--bg-elev);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-    }
-    .recent-queries-card h3 {
-      margin: 0 0 16px 0;
-      font-size: 14px;
+    .block h3 {
+      margin: 0 0 6px 0;
+      font-size: 12.5px;
       color: var(--text-dim);
       font-weight: 600;
     }
-    .recent-queries-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+
+    .block ul {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
     }
-    .recent-query-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      cursor: pointer;
-      text-align: left;
-      transition: all 0.2s ease;
+
+    .block li {
+      margin-bottom: 6px;
+      line-height: 1.5;
     }
-    .recent-query-item:hover:not(:disabled) {
-      background: rgba(59, 130, 246, 0.08);
-      border-color: rgba(59, 130, 246, 0.3);
-      transform: translateX(4px);
-    }
-    .recent-query-item:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .recent-query-content {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .recent-query-text {
-      font-weight: 500;
-      color: var(--text);
-      font-size: 14px;
-    }
-    .recent-query-meta {
-      font-size: 11px;
+
+    .dim {
       color: var(--text-dim);
-    }
-    .recent-query-arrow {
-      color: var(--text-dim);
-      font-size: 16px;
-      transition: color 0.2s ease, transform 0.2s ease;
-    }
-    .recent-query-item:hover:not(:disabled) .recent-query-arrow {
-      color: var(--accent);
-      transform: scale(1.1);
+      margin: 0;
+      font-size: 13px;
     }
 
     .user-quota-warning-banner {
-      background: rgba(245, 158, 11, 0.15);
+      background: rgba(245, 158, 11, 0.1);
       border: 1px solid var(--amber);
       color: #fcd34d;
       padding: 12px 16px;
@@ -628,264 +505,103 @@ import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.se
       margin-bottom: 8px;
       animation: banner-fade-in 0.3s ease-out;
     }
+
     @keyframes banner-fade-in {
       from { opacity: 0; transform: translateY(-8px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Mobile: the dashboard is built around a 960px column with 32px
-       padding and a fixed-layout table. Below ~640px those defaults
-       overflow, so we shrink padding, stack the header, and let the
-       sources table scroll horizontally inside its block instead of
-       blowing out the viewport. */
-    @media (max-width: 640px) {
-      header {
-        padding: 12px 16px;
-        flex-wrap: wrap;
-        gap: 8px;
+    /* Desktop layout adjustments: hide hamburger */
+    @media (min-width: 1024px) {
+      .menu-btn {
+        display: none;
       }
-      .header-actions { flex-wrap: wrap; }
+    }
 
-      main {
-        padding: 16px;
-        gap: 16px;
+    /* Mobile adjustments - Denser padding & spacing */
+    @media (max-width: 768px) {
+      header {
+        padding: 8px 16px;
+        height: 50px;
       }
-      .query-card, .progress-card, .report {
-        padding: 16px;
+      
+      .main-panel {
+        padding: 12px;
+        gap: 14px;
       }
+
+      .query-card {
+        padding: 14px;
+      }
+
       .actions {
-        flex-wrap: wrap;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        margin-top: 12px;
       }
-      .lang-hint {
-        margin-left: 0;
+
+      .actions button {
         width: 100%;
       }
 
-      .report-header {
-        flex-wrap: wrap;
-        gap: 8px;
+      .lang-hint {
+        margin-left: 0;
+        width: 100%;
+        text-align: center;
       }
 
-      /* Let the sources table scroll horizontally inside its block
-         rather than forcing the whole page wider than the viewport. */
-      .block { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      table { min-width: 480px; }
-      th, td { padding: 6px 8px; }
-      .score { min-width: 80px; }
-      .score-bar { min-width: 40px; }
+      .stage-meta {
+        width: 100%;
+        margin-top: 6px;
+        margin-left: 0;
+      }
     }
   `]
 })
-/**
- * Authenticated dashboard page.
- *
- * Lets the user submit a research question, switch language, and watch
- * the workflow progress in real time. The component subscribes to the
- * job streaming endpoint as soon as the orchestrator accepts the
- * submission and renders the final report when the workflow completes.
- */
 export class DashboardComponent implements OnInit, OnDestroy {
   private jobs = inject(JobsService);
   private auth = inject(AuthService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private localeService = inject(LocaleService);
   private http = inject(HttpClient);
-
-  userUsage = signal<any | null>(null);
-
-  loadUsage() {
-    this.http.get<any>('/me/usage', { withCredentials: true }).subscribe({
-      next: (data) => {
-        this.userUsage.set(data);
-      },
-      error: () => {
-        // Silently ignore to avoid interrupting user experience
-      }
-    });
-  }
-  /**
-   * Per-(userId, sid) snapshot of the user's most recent submission.
-   * The dashboard hydrates from this on init and writes back to it on
-   * every stream event so closing the tab, locking a mobile screen, or
-   * reloading the page restores the in-flight or just-completed run
-   * without a backend round-trip.
-   */
   private storage = inject(JobSessionStorageService);
   private promptCache = inject(PromptCacheService);
-  recentQueries = signal<PromptCacheEntry[]>([]);
 
+  // Shell open/close states
+  historyOpen = signal(false);
+
+  // User profile claims
+  username = this.auth.username;
+  email = this.auth.email;
+  loginMethod = this.auth.loginMethod;
+
+  // Developer mode isolate
+  debugMode = signal(false);
+
+  userUsage = signal<any | null>(null);
+  recentQueries = signal<PromptCacheEntry[]>([]);
   readonly locales = LOCALES;
   query = '';
   status = signal<JobStatus | null>(null);
   quickAnswerPriority = signal<number>(0);
-  /**
-   * Local generation id for the current Run click. Minted server-side
-   * if the SPA forgets to provide one; we always provide one. Every
-   * inbound stream event is matched against this so a stray event from
-   * a superseded job cannot mutate the new run's UI.
-   */
+
   private activeClientRequestId: string | null = null;
-  /**
-   * Id of the job currently attached to the dashboard. Set on a
-   * successful submit, cleared when the snapshot reaches a terminal
-   * state. The supersede flow on the next Run click reads this and
-   * forwards it as `supersedesJobId` so the backend cancels the old
-   * job atomically.
-   */
   private activeJobId: string | null = null;
-  /**
-   * True while a cancel HTTP call is in flight or while we are
-   * waiting for the terminal `CANCELED` snapshot to arrive over the
-   * stream. Used to disable the Cancel button so a double-click
-   * doesn't fire a second cancel.
-   */
   canceling = signal(false);
-  /**
-   * Whether the "Key findings" panel is expanded. The panel is
-   * collapsed by default because the conflicts & contradictions
-   * section above it carries the more actionable signal; users
-   * opt into the full findings list when they want detail.
-   */
-  keyFindingsOpen = signal(false);
-  userQuickAnswerExpanded = signal<boolean | null>(null);
-  quickAnswerExpanded = computed(() => {
-    if (this.userQuickAnswerExpanded() !== null) {
-      return this.userQuickAnswerExpanded();
-    }
-    return this.status()?.state !== 'DONE';
-  });
 
-  toggleQuickAnswer() {
-    this.userQuickAnswerExpanded.set(!this.quickAnswerExpanded());
-  }
+  // Timestamp of submission (used to calculate total elapsed time)
+  submittedAt = signal<string | null>(null);
 
-  formatDate(dateStr?: string | null): string {
-    if (!dateStr) return '';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleString();
-    } catch {
-      return dateStr;
-    }
-  }
+  // Raw history of stage transitions
+  private rawTimings = signal<StageTiming[]>([]);
 
-  processQuickAnswerPriority(incoming: JobStatus | null): JobStatus | null {
-    if (!incoming) {
-      this.quickAnswerPriority.set(0);
-      return null;
-    }
-
-    // Clone incoming to avoid modifying original
-    const updated = { ...incoming };
-
-    // Try parsing legacy stringified JSON in quickAnswer
-    if (updated.quickAnswer && !updated.quickAnswerInfo) {
-      try {
-        const parsed = JSON.parse(updated.quickAnswer);
-        if (parsed && parsed.answer && parsed.artifactType && parsed.source) {
-          updated.quickAnswerInfo = parsed;
-          updated.quickAnswer = parsed.answer;
-        }
-      } catch (e) {
-        // Not JSON
-      }
-    }
-
-    const current = this.status();
-    if (!current) {
-      this.quickAnswerPriority.set(this.determinePriority(updated));
-      return updated;
-    }
-
-    const incomingPriority = this.determinePriority(updated);
-    const currentPriority = this.quickAnswerPriority();
-
-    if (incomingPriority >= currentPriority) {
-      this.quickAnswerPriority.set(incomingPriority);
-      return updated;
-    } else {
-      // Retain the higher priority quickAnswer and quickAnswerInfo
-      updated.quickAnswer = current.quickAnswer;
-      updated.quickAnswerInfo = current.quickAnswerInfo;
-      return updated;
-    }
-  }
-
-  private determinePriority(status: JobStatus): number {
-    if (status.quickAnswerInfo) {
-      const type = status.quickAnswerInfo.artifactType;
-      const source = status.quickAnswerInfo.source;
-      if (source === 'CURRENT_RUN') {
-        return type === 'A2' ? 400 : 300;
-      } else if (source === 'CACHE') {
-        return type === 'A2' ? 200 : 100;
-      }
-    }
-    if (status.quickAnswer) {
-      return 0; // Legacy raw string
-    }
-    return -1; // No quick answer
-  }
-
-  /**
-   * Number of streaming snapshots received from the backend for the
-   * current run. Surfaces in the UI so the user can tell that the
-   * connection is alive and progressing even when the coarse `stage`
-   * label doesn't change between pings.
-   */
-  updateCount = signal(0);
-  /**
-   * Monotonic 1Hz tick that re-evaluates time-derived computeds (e.g.
-   * "updated 2s ago"). Kept as a signal so the framework can fold it
-   * into the change-detection graph instead of us forcing
-   * markForCheck() on every tick.
-   */
+  // Ticker for running total time
   private now = signal(Date.now());
   private nowInterval: ReturnType<typeof setInterval> | null = null;
-  /**
-   * Whether the dashboard considers the current job in-flight. Used to
-   * disable the textarea, locale switcher, and primary submit button.
-   *
-   * `CANCEL_REQUESTED` is treated as still-running on purpose: the
-   * orchestrator has accepted the cancel but the workflow has not yet
-   * exited a cooperative boundary, so the UI must keep the existing job
-   * attached until the terminal `CANCELED` snapshot arrives. G6 layers
-   * a separate `canceling` signal on top of this for Cancel-button
-   * specific behaviour.
-   */
-  isRunning = computed(() => {
-    const s = this.status();
-    return s !== null && (
-      s.state === 'PENDING' ||
-      s.state === 'RUNNING' ||
-      s.state === 'CANCEL_REQUESTED'
-    );
-  });
-  /**
-   * Human-readable "Xs ago" string derived from the latest
-   * `updatedAt` on the job snapshot. Re-evaluates every second so the
-   * user can see freshness without us having to push a custom
-   * formatter on every stream chunk.
-   */
-  timeSinceUpdate = computed(() => {
-    const s = this.status();
-    if (!s) return '';
-    const t = Date.parse(s.updatedAt);
-    if (Number.isNaN(t)) return '';
-    const deltaSec = Math.max(0, Math.round((this.now() - t) / 1000));
-    if (deltaSec < 1) return 'just now';
-    if (deltaSec < 60) return `${deltaSec}s ago`;
-    const m = Math.floor(deltaSec / 60);
-    const s2 = deltaSec % 60;
-    return `${m}m ${s2}s ago`;
-  });
 
-  locale = this.localeService.locale;
-  activeLocaleLabel = computed(() => {
-    const code = this.localeService.locale();
-    return LOCALES.find(l => l.code === code)?.label ?? code;
-  });
-
+  // Reconnection variables
   private streamSub: Subscription | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly visibilityHandler = () => {
@@ -894,26 +610,99 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   };
 
-  /** Switches the active locale via the shared locale service. */
-  setLocale(code: LocaleCode) {
-    this.localeService.set(code);
-  }
+  /**
+   * Timings computed list. Dynamically evaluates active stage durations using `now()`
+   */
+  stageTimings = computed<StageTiming[]>(() => {
+    const list = [...this.rawTimings()];
+    if (list.length === 0) return [];
+    
+    const last = list[list.length - 1];
+    if (!last.completedAt && this.isRunning()) {
+      const currentDuration = Math.max(0, this.now() - Date.parse(last.startedAt));
+      list[list.length - 1] = {
+        ...last,
+        durationMs: currentDuration
+      };
+    }
+    return list;
+  });
 
   /**
-   * Whether the dashboard currently owns an active backend job. Public
-   * so the template can conditionally render the Cancel button; relying
-   * on a plain method (rather than a signal) is fine here because
-   * Angular's default change detection re-evaluates it on every event
-   * tick, and Cancel button visibility tracks the same events that
-   * mutate `activeJobId`.
+   * Live elapsed time text while the job is in flight
    */
-  hasActiveJob(): boolean {
-    return this.activeJobId !== null;
+  runningTotalTimeText = computed(() => {
+    const startStr = this.submittedAt();
+    if (!startStr) return '0s';
+    const start = Date.parse(startStr);
+    const diffMs = Math.max(0, this.now() - start);
+    const totalSec = Math.round(diffMs / 1000);
+    return `${totalSec}s`;
+  });
+
+  /**
+   * Final completed total execution time
+   */
+  totalTimeText = computed(() => {
+    const startStr = this.submittedAt();
+    const currentStatus = this.status();
+    if (!startStr || !currentStatus || this.isRunning()) return '';
+    const start = Date.parse(startStr);
+    const end = Date.parse(currentStatus.updatedAt);
+    if (Number.isNaN(start) || Number.isNaN(end)) return '';
+    const totalSec = Math.round(Math.max(0, end - start) / 1000);
+    return `${totalSec}s`;
+  });
+
+  isRunning = computed(() => {
+    const s = this.status();
+    return s !== null && (
+      s.state === 'PENDING' ||
+      s.state === 'RUNNING' ||
+      s.state === 'CANCEL_REQUESTED'
+    );
+  });
+
+  locale = this.localeService.locale;
+  activeLocaleLabel = computed(() => {
+    const code = this.localeService.locale();
+    return LOCALES.find(l => l.code === code)?.label ?? code;
+  });
+
+  updateCount = signal(0);
+
+  ngOnInit() {
+    document.addEventListener('visibilitychange', this.visibilityHandler);
+    this.hydrateFromCache();
+    this.loadRecentQueriesList();
+    this.loadUsage();
+
+    // Subscribe to query params to isolate Developer Mode
+    this.route.queryParams.subscribe(params => {
+      this.debugMode.set(params['debug'] === 'true');
+    });
   }
 
-  /** Toggles the collapsible "Key findings" panel. */
-  toggleKeyFindings() {
-    this.keyFindingsOpen.update(v => !v);
+  ngOnDestroy() {
+    document.removeEventListener('visibilitychange', this.visibilityHandler);
+    this.cancelStream();
+  }
+
+  loadUsage() {
+    this.http.get<any>('/me/usage', { withCredentials: true }).subscribe({
+      next: (data) => {
+        this.userUsage.set(data);
+      },
+      error: () => {}
+    });
+  }
+
+  setLocale(code: string) {
+    this.localeService.set(code as LocaleCode);
+  }
+
+  hasActiveJob(): boolean {
+    return this.activeJobId !== null;
   }
 
   loadRecentQueriesList() {
@@ -921,21 +710,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.recentQueries.set(this.promptCache.load(userId));
   }
 
-  activeLocaleLabelOf(code: string): string {
-    return LOCALES.find(l => l.code === code)?.label ?? code;
-  }
-
-  timeSinceTimestamp(timestamp: string): string {
-    const t = Date.parse(timestamp);
-    if (Number.isNaN(t)) return '';
-    const deltaSec = Math.max(0, Math.round((this.now() - t) / 1000));
-    if (deltaSec < 1) return 'just now';
-    if (deltaSec < 60) return `${deltaSec}s ago`;
-    const m = Math.floor(deltaSec / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return new Date(t).toLocaleDateString();
+  getStatusLabel(state: string): string {
+    if (state === 'RUNNING') {
+      const stage = this.status()?.stage?.toLowerCase() || '';
+      if (stage.includes('synth') || stage.includes('enhance') || stage.includes('judge')) {
+        return 'Enhancing';
+      }
+      return 'Researching';
+    }
+    switch (state) {
+      case 'PENDING': return 'Preparing';
+      case 'DONE': return 'Completed';
+      case 'CANCELED': return 'Canceled';
+      case 'CANCEL_REQUESTED': return 'Canceling';
+      case 'FAILED': return 'Failed';
+      default: return state;
+    }
   }
 
   loadRecentQuery(item: PromptCacheEntry) {
@@ -945,10 +735,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.status.set(null);
     this.status.set(this.processQuickAnswerPriority(item.status));
     this.canceling.set(false);
-    this.userQuickAnswerExpanded.set(null);
     this.updateCount.set(0);
     this.activeJobId = null;
     this.activeClientRequestId = null;
+    this.submittedAt.set(item.status.updatedAt);
+    
+    // Setup raw timings from completed job
+    const finishedTime = Date.parse(item.status.updatedAt);
+    this.rawTimings.set([{
+      stage: item.status.stage,
+      startedAt: item.status.updatedAt,
+      completedAt: item.status.updatedAt,
+      durationMs: 0
+    }]);
 
     // Save as current active job session so page reload preserves the view
     const userId = this.auth.currentUserId();
@@ -971,36 +770,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Submits the current question and opens the streaming subscription
-   * as soon as the orchestrator returns the new job identifier.
-   *
-   * Every click mints a fresh `clientRequestId` so the dashboard can
-   * verify the orchestrator's acceptance against its current local
-   * generation and discard stale stream events from any prior job.
-   * When an active job already exists, its id rides along as
-   * `supersedesJobId` so the backend cancels it atomically before
-   * accepting the new submission.
-   */
   run() {
     const newClientRequestId = this.mintClientRequestId();
     const supersedesJobId = this.activeJobId ?? undefined;
     const submittedQuery = this.query.trim();
     const submittedLocale = this.localeService.current();
-    const submittedAt = new Date().toISOString();
+    const submittedTimeStr = new Date().toISOString();
 
     this.cancelStream();
     this.status.set(null);
     this.quickAnswerPriority.set(0);
     this.canceling.set(false);
-    this.keyFindingsOpen.set(false);
-    this.userQuickAnswerExpanded.set(null);
     this.updateCount.set(0);
+    this.submittedAt.set(submittedTimeStr);
+    this.rawTimings.set([]);
     this.startNowTicker();
 
-    // Optimistic local pointer: clear the prior job immediately so a
-    // stream event from it that races our cancel cannot land on the
-    // new run.
     this.activeClientRequestId = newClientRequestId;
     this.activeJobId = null;
 
@@ -1010,9 +795,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }).subscribe({
       next: ({ jobId, clientRequestId }) => {
         if (clientRequestId !== newClientRequestId) {
-          // The orchestrator echoed a different generation than the
-          // one we minted. The most likely cause is a stale response
-          // from a previous click landing late; refuse to attach.
           this.status.set({
             jobId, state: 'FAILED', stage: 'failed',
             updatedAt: new Date().toISOString(),
@@ -1028,8 +810,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
           clientRequestId: newClientRequestId,
           query: submittedQuery,
           locale: submittedLocale,
-          submittedAt,
+          submittedAt: submittedTimeStr,
         });
+        
+        // Add initial timing
+        this.rawTimings.set([{
+          stage: 'submitted',
+          startedAt: submittedTimeStr,
+          durationMs: 0
+        }]);
+
         this.openStream(jobId);
       },
       error: err => {
@@ -1044,32 +834,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Posts /jobs/{id}/cancel for the currently attached job. The
-   * acknowledgement is folded into the visible status, and
-   * `canceling()` is held true until the terminal `CANCELED`
-   * snapshot arrives on the stream (see {@link openStream}). Errors
-   * on the cancel POST flip `canceling()` back to false but leave
-   * the job attached so the user can retry.
-   */
   cancel() {
     const id = this.activeJobId;
     if (!id || this.canceling()) return;
     this.canceling.set(true);
     this.jobs.cancel(id).subscribe({
       next: snap => {
-        // The acknowledged snapshot is typically CANCEL_REQUESTED.
-        // Fold it into the UI + cache; the stream takes over from
-        // here and will deliver the terminal CANCELED event.
         if (this.activeJobId === id) {
           this.status.set(snap);
           this.persistStatus(snap);
         }
       },
       error: err => {
-        // Non-terminal cancel error — surface to the user but keep
-        // the job attached so they can try again or wait for the
-        // workflow to finish naturally.
         this.canceling.set(false);
         const current = this.status();
         if (current) {
@@ -1083,40 +859,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Clears the visible state and the per-(userId, sid) cache record.
-   * Disabled while {@link isRunning} returns true, so a user cannot
-   * silently abandon an in-flight job here — they must go through the
-   * explicit Cancel button so the backend tears the workflow down too.
-   */
   reset() {
     if (this.isRunning()) return;
     this.cancelStream();
     this.status.set(null);
     this.quickAnswerPriority.set(0);
     this.canceling.set(false);
-    this.userQuickAnswerExpanded.set(null);
     this.activeJobId = null;
     this.activeClientRequestId = null;
     this.query = '';
+    this.submittedAt.set(null);
+    this.rawTimings.set([]);
     this.storage.clearFor(this.auth.currentUserId(), this.auth.currentSessionId());
   }
 
-  /**
-   * Cancels the stream, asks the server to end the session, then routes
-   * to /login. The Observable returned by AuthService.logout() must be
-   * subscribed for the HTTP call to actually fire — the prior fire-and-
-   * forget version never reached the server, which left server-side
-   * sessions/refresh-families alive after a "logout".
-   *
-   * AuthService.logout() always completes (it catches HTTP failures and
-   * clears local state regardless), so we route on `finalize`-equivalent
-   * behaviour: navigate inside subscribe so the back-button history is
-   * predictable.
-   */
   logout() {
-    // Snapshot identity BEFORE the auth call clears it, so clearFor can
-    // still match the cached record against (userId, sid).
     const userId = this.auth.currentUserId();
     const sid = this.auth.currentSessionId();
     this.cancelStream();
@@ -1125,90 +882,82 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.activeClientRequestId = null;
     this.auth.logout().subscribe({
       next:     () => this.router.navigate(['/login']),
-      // Local state is already cleared by AuthService on either branch;
-      // still route to /login so the user is not stuck on the dashboard
-      // staring at an unauthenticated view.
       error:    () => this.router.navigate(['/login']),
     });
   }
 
-  /** Extracts the numeric portion of a tier label for CSS class binding. */
-  tierClass(reliability: string): string {
-    if (reliability.endsWith('1')) return '1';
-    if (reliability.endsWith('2')) return '2';
-    return '3';
-  }
+  private processQuickAnswerPriority(incoming: JobStatus | null): JobStatus | null {
+    if (!incoming) {
+      this.quickAnswerPriority.set(0);
+      return null;
+    }
 
-  /**
-   * Maps a numeric confidence score to one of three colour bands so the
-   * score bar, the numeric label, and the overall confidence chip all
-   * share consistent visual styling.
-   */
-  scoreBand(score: number): 'high' | 'medium' | 'low' {
-    if (score == null) return 'low';
-    if (score >= 80) return 'high';
-    if (score >= 50) return 'medium';
-    return 'low';
-  }
+    const updated = { ...incoming };
 
-  /**
-   * Renders a compact representation of a URL for table display: host
-   * plus a truncated path so long URLs do not blow up the column width.
-   */
-  shortUrl(url: string): string {
-    try {
-      const u = new URL(url);
-      return u.host + (u.pathname.length > 30 ? u.pathname.slice(0, 30) + '...' : u.pathname);
-    } catch {
-      return url;
+    if (updated.quickAnswer && !updated.quickAnswerInfo) {
+      try {
+        const parsed = JSON.parse(updated.quickAnswer);
+        if (parsed && parsed.answer && parsed.artifactType && parsed.source) {
+          updated.quickAnswerInfo = parsed;
+          updated.quickAnswer = parsed.answer;
+        }
+      } catch (e) {}
+    }
+
+    const current = this.status();
+    if (!current) {
+      this.quickAnswerPriority.set(this.determinePriority(updated));
+      return updated;
+    }
+
+    const incomingPriority = this.determinePriority(updated);
+    const currentPriority = this.quickAnswerPriority();
+
+    if (incomingPriority >= currentPriority) {
+      this.quickAnswerPriority.set(incomingPriority);
+      return updated;
+    } else {
+      updated.quickAnswer = current.quickAnswer;
+      updated.quickAnswerInfo = current.quickAnswerInfo;
+      return updated;
     }
   }
 
-  /**
-   * Subscribes to the streaming feed for the given job id and pushes
-   * each emitted snapshot into the visible state signal.
-   *
-   * Each event is matched against {@link activeJobId} before mutating
-   * any visible state — a stream that was opened against a now-
-   * superseded job (because Run was clicked again before this
-   * subscription tore down) must not be allowed to overwrite the new
-   * run's snapshot. The same guard also drops cross-tab interference
-   * if a second tab cancels the same job.
-   *
-   * Every accepted event is persisted into the cache so a reload at
-   * any point during the workflow can restore the latest snapshot
-   * without a backend round-trip.
-   */
+  private determinePriority(status: JobStatus): number {
+    if (status.quickAnswerInfo) {
+      const type = status.quickAnswerInfo.artifactType;
+      const source = status.quickAnswerInfo.source;
+      if (source === 'CURRENT_RUN') {
+        return type === 'A2' ? 400 : 300;
+      } else if (source === 'CACHE') {
+        return type === 'A2' ? 200 : 100;
+      }
+    }
+    if (status.quickAnswer) {
+      return 0;
+    }
+    return -1;
+  }
+
   private openStream(jobId: string) {
     this.streamSub = this.jobs.stream(jobId).subscribe({
       next: status => {
-        if (status.jobId !== this.activeJobId) {
-          // Stale event from a job that has since been superseded —
-          // drop silently. The other subscriber (if still attached)
-          // gets the same event, but we no longer own the UI for
-          // that job.
-          return;
-        }
-        // Bump the visible update counter on every snapshot so the
-        // user sees mid-stage pings even when `stage` stays the same.
+        if (status.jobId !== this.activeJobId) return;
         this.updateCount.update(n => n + 1);
         const resolvedStatus = this.processQuickAnswerPriority(status);
         this.status.set(resolvedStatus);
+        
+        // Timing tracking
+        this.updateStageTiming(status.stage, status.updatedAt, this.isTerminalState(status.state));
+
         if (resolvedStatus) this.persistStatus(resolvedStatus);
+        
         if (this.isTerminalState(status.state)) {
           this.clearReconnectTimer();
-          // Stop the relative-time ticker on any terminal state so
-          // the "Xs ago" label freezes at the moment the workflow
-          // ended. CANCEL_REQUESTED is not terminal — we keep the
-          // ticker running until CANCELED actually lands.
           this.stopNowTicker();
           this.canceling.set(false);
-          // Detach the active pointer so the next Run click does
-          // not try to supersede an already-terminal job. The
-          // cached snapshot still survives in storage for hydrate.
           this.activeJobId = null;
 
-          // Save to prompt cache if completed successfully
           const userId = this.auth.currentUserId();
           if (userId && status.state === 'DONE') {
             this.promptCache.save(userId, this.query, status, this.localeService.current());
@@ -1218,12 +967,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       },
       error: err => {
-        if (this.activeJobId !== jobId) {
-          // The stream that errored was already abandoned. Nothing
-          // to surface — the active stream (if any) will report its
-          // own errors.
-          return;
-        }
+        if (this.activeJobId !== jobId) return;
         this.updateCount.update(n => n + 1);
         const message = err?.message || 'Stream error';
         if (message.includes('authentication expired')) {
@@ -1231,34 +975,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
           return;
         }
 
-        // Check if the job has finished on the backend before attempting to reconnect
         this.jobs.get(jobId).subscribe({
           next: status => {
             if (this.activeJobId !== jobId) return;
             if (this.isTerminalState(status.state)) {
-              // The job finished while we were disconnected/backgrounded!
               const resolvedStatus = this.processQuickAnswerPriority(status);
               this.status.set(resolvedStatus);
+              
+              this.updateStageTiming(status.stage, status.updatedAt, true);
+
               if (resolvedStatus) this.persistStatus(resolvedStatus);
               this.clearReconnectTimer();
               this.stopNowTicker();
               this.canceling.set(false);
               this.activeJobId = null;
 
-              // Save to prompt cache!
               const userId = this.auth.currentUserId();
               if (userId && status.state === 'DONE') {
                 this.promptCache.save(userId, this.query, status, this.localeService.current());
                 this.loadRecentQueriesList();
               }
             } else {
-              // Still running, proceed to reconnect
               this.handleInterruptedConnection(jobId, message);
             }
           },
           error: () => {
             if (this.activeJobId !== jobId) return;
-            // If the GET request also fails (e.g. 404), treat it as failed.
             const failed: JobStatus = {
               jobId, state: 'FAILED', stage: 'failed',
               updatedAt: new Date().toISOString(),
@@ -1281,6 +1023,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  private updateStageTiming(stage: string, updatedAt: string, isTerminal: boolean) {
+    const list = [...this.rawTimings()];
+    if (list.length === 0 || list[list.length - 1].stage !== stage) {
+      if (list.length > 0) {
+        const prev = list[list.length - 1];
+        prev.completedAt = updatedAt;
+        prev.durationMs = Math.max(0, Date.parse(updatedAt) - Date.parse(prev.startedAt));
+      }
+      list.push({
+        stage,
+        startedAt: updatedAt,
+        durationMs: 0
+      });
+    } else {
+      if (isTerminal) {
+        const active = list[list.length - 1];
+        active.completedAt = updatedAt;
+        active.durationMs = Math.max(0, Date.parse(updatedAt) - Date.parse(active.startedAt));
+      }
+    }
+    this.rawTimings.set(list);
+  }
+
   private handleInterruptedConnection(jobId: string, message: string) {
     const current = this.status();
     if (current && this.isRunning()) {
@@ -1294,35 +1059,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Whether the supplied state is one of the public terminal states.
-   * Mirrors the same predicate the backend enforces on JobStore.
-   */
   private isTerminalState(state: JobStatus['state']): boolean {
     return state === 'DONE' || state === 'FAILED' || state === 'CANCELED';
   }
 
-  /**
-   * Mints a fresh client request id. Uses the browser's crypto.randomUUID
-   * when available (every browser Angular 18 targets), and falls back to
-   * a timestamp+random string so legacy environments still produce
-   * something unique enough for matching purposes.
-   */
   private mintClientRequestId(): string {
     try {
       if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
       }
-    } catch { /* fall through */ }
+    } catch {}
     return `c-${Date.now()}-${Math.floor(Math.random() * 1e9).toString(36)}`;
   }
 
-  /**
-   * Writes the initial cache record on a successful submit. The
-   * status field is the optimistic local PENDING snapshot — the
-   * first real event from the stream will overwrite it via
-   * {@link persistStatus}.
-   */
   private persistInitial(input: {
     jobId: string;
     clientRequestId: string;
@@ -1352,18 +1101,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       submittedAt: input.submittedAt,
       updatedAt: input.submittedAt,
       status: optimistic,
-      resumeUntil: '',     // storage fills in the default 24h TTL.
+      resumeUntil: '',
     };
     this.storage.save(record);
   }
 
-  /**
-   * Folds the latest snapshot into the cache without rewriting the
-   * full record. The storage layer drops the update silently when
-   * the cached record's jobId does not match — the same guarantee
-   * that protects against stale stream events landing on the new
-   * active record.
-   */
   private persistStatus(status: JobStatus): void {
     if (!status.jobId) return;
     this.storage.update({
@@ -1373,15 +1115,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Restores a previously-submitted job from cache on component init.
-   *
-   * Terminal records render immediately and do not reopen a stream:
-   * the deliverable is already in the cache and the backend may have
-   * already pruned the job. Non-terminal records render their cached
-   * snapshot first and then reopen the stream so the user sees fresh
-   * updates as soon as the connection is alive again.
-   */
   private hydrateFromCache(): void {
     const userId = this.auth.currentUserId();
     const sid = this.auth.currentSessionId();
@@ -1392,25 +1125,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.activeClientRequestId = record.clientRequestId;
     this.status.set(this.processQuickAnswerPriority(record.status));
     this.updateCount.set(0);
+    this.submittedAt.set(record.submittedAt || record.status.updatedAt);
 
-    if (this.isTerminalState(record.status.state)) {
-      // Terminal cache hit — show the cached final report (or error)
-      // without any backend traffic. activeJobId stays null so the
-      // next Run click does not try to supersede a finished job.
+    // Initial timings setup from cache
+    const startStr = record.submittedAt || record.status.updatedAt;
+    const endStr = record.status.updatedAt;
+    const isTerm = this.isTerminalState(record.status.state);
+    
+    this.rawTimings.set([{
+      stage: record.status.stage,
+      startedAt: startStr,
+      completedAt: isTerm ? endStr : undefined,
+      durationMs: isTerm ? Math.max(0, Date.parse(endStr) - Date.parse(startStr)) : 0
+    }]);
+
+    if (isTerm) {
       this.activeJobId = null;
       this.loadUsage();
       return;
     }
 
-    // Still in flight when last persisted — attach the active pointer
-    // and reopen the stream. The first event will update the
-    // snapshot, and the terminal path will clear activeJobId.
     this.activeJobId = record.jobId;
     this.startNowTicker();
     this.openStream(record.jobId);
   }
 
-  /** Cancels any active streaming subscription. */
   private cancelStream() {
     this.clearReconnectTimer();
     this.streamSub?.unsubscribe();
@@ -1447,39 +1186,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Starts the 1Hz ticker that drives the relative "Xs ago" label.
-   * Safe to call repeatedly — only one interval is ever live.
-   */
   private startNowTicker() {
     if (this.nowInterval) return;
     this.now.set(Date.now());
     this.nowInterval = setInterval(() => this.now.set(Date.now()), 1000);
   }
 
-  /** Stops the relative-time ticker. */
   private stopNowTicker() {
     if (this.nowInterval) {
       clearInterval(this.nowInterval);
       this.nowInterval = null;
     }
-  }
-
-  /**
-   * Restores the user's most recent submission from the per-(userId,
-   * sid) cache so a reload, tab close + reopen, or mobile screen
-   * timeout does not lose the in-flight or just-completed run.
-   */
-  ngOnInit() {
-    document.addEventListener('visibilitychange', this.visibilityHandler);
-    this.hydrateFromCache();
-    this.loadRecentQueriesList();
-    this.loadUsage();
-  }
-
-  /** Tears down stream + interval when the component is destroyed. */
-  ngOnDestroy() {
-    document.removeEventListener('visibilitychange', this.visibilityHandler);
-    this.cancelStream();
   }
 }

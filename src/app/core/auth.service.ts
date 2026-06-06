@@ -52,10 +52,16 @@ export class AuthService {
    * job.
    */
   private sessionId   = signal<string | null>(null);
+  private currentUsername = signal<string | null>(null);
+  private currentUserEmail = signal<string | null>(null);
+  private currentLoginMethod = signal<string | null>(null);
 
   readonly token           = this.accessToken.asReadonly();
   readonly sid             = this.sessionId.asReadonly();
   readonly isAuthenticated = computed(() => this.accessToken() !== null);
+  readonly username        = this.currentUsername.asReadonly();
+  readonly email           = this.currentUserEmail.asReadonly();
+  readonly loginMethod     = this.currentLoginMethod.asReadonly();
 
   login(username: string, password: string): Observable<TokenResponse> {
     return this.http
@@ -166,11 +172,24 @@ export class AuthService {
 
   // ---------- internals ----------
 
+  changePassword(currentPassword: string, newPassword: string): Observable<void> {
+    return this.http.post<void>(
+      '/auth/password',
+      { currentPassword, newPassword },
+      { headers: { Authorization: `Bearer ${this.accessToken()}` } }
+    ).pipe(tap(() => {
+      this.clear();
+    }));
+  }
+
   private adoptAccess(jwt: string, expiresIn?: number): void {
     this.accessToken.set(jwt);
     const claims = this.decodeClaims(jwt);
     this.userId.set(claims.sub);
     this.sessionId.set(claims.sid);
+    this.currentUsername.set(claims.username);
+    this.currentUserEmail.set(claims.email);
+    this.currentLoginMethod.set(claims.loginMethod);
     const expiresAt = typeof expiresIn === 'number' && expiresIn > 0
       ? Date.now() + expiresIn * 1000
       : (typeof claims.exp === 'number' ? claims.exp * 1000 : null);
@@ -182,6 +201,9 @@ export class AuthService {
     this.userId.set(null);
     this.sessionId.set(null);
     this.tokenExpiresAt.set(null);
+    this.currentUsername.set(null);
+    this.currentUserEmail.set(null);
+    this.currentLoginMethod.set(null);
   }
 
   /**
@@ -190,22 +212,39 @@ export class AuthService {
    * local cache keying. Returns nulls on any malformed input rather
    * than throwing - the caller treats "no identity" as "no resume".
    */
-  private decodeClaims(jwt: string): { sub: string | null; sid: string | null; exp: number | null } {
+  private decodeClaims(jwt: string): { 
+    sub: string | null; 
+    sid: string | null; 
+    exp: number | null;
+    username: string | null;
+    email: string | null;
+    loginMethod: string | null;
+  } {
     try {
       const parts = jwt.split('.');
-      if (parts.length < 2) return { sub: null, sid: null, exp: null };
+      if (parts.length < 2) return { sub: null, sid: null, exp: null, username: null, email: null, loginMethod: null };
       const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
       // Pad to a multiple of 4 - base64url payloads omit trailing '='.
       const padded = payload + '='.repeat((4 - (payload.length % 4)) % 4);
       const json = atob(padded);
-      const obj = JSON.parse(json) as { sub?: unknown; sid?: unknown; exp?: unknown };
+      const obj = JSON.parse(json) as { 
+        sub?: unknown; 
+        sid?: unknown; 
+        exp?: unknown;
+        username?: unknown;
+        email?: unknown;
+        loginMethod?: unknown;
+      };
       return {
         sub: typeof obj.sub === 'string' ? obj.sub : null,
         sid: typeof obj.sid === 'string' ? obj.sid : null,
         exp: typeof obj.exp === 'number' ? obj.exp : null,
+        username: typeof obj.username === 'string' ? obj.username : null,
+        email: typeof obj.email === 'string' ? obj.email : null,
+        loginMethod: typeof obj.loginMethod === 'string' ? obj.loginMethod : null,
       };
     } catch {
-      return { sub: null, sid: null, exp: null };
+      return { sub: null, sid: null, exp: null, username: null, email: null, loginMethod: null };
     }
   }
 
