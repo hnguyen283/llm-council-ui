@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { LocaleService } from './core/locale.service';
 
 /**
  * Root component of the single-page application.
@@ -17,4 +18,6 @@ import { RouterOutlet } from '@angular/router';
   imports: [RouterOutlet],
   template: `<router-outlet />`
 })
-export class AppComponent {}
+export class AppComponent {
+  private readonly locale = inject(LocaleService);
+}

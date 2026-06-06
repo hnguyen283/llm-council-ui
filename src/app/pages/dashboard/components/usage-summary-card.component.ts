@@ -1,27 +1,29 @@
 import { Component, input, computed } from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { UserUsage } from '../../../core/usage.service';
 
 @Component({
   selector: 'app-usage-summary-card',
   standalone: true,
+  imports: [TranslateModule],
   template: `
     @if (loading()) {
       <div class="usage-status" role="status">
-        <span class="spinner"></span> Loading usage...
+        <span class="spinner"></span> {{ 'Loading usage...' | translate }}
       </div>
     } @else if (error()) {
       <div class="usage-status error" role="alert">
         ⚠️ {{ error() }}
       </div>
     } @else if (!usage()) {
-      <div class="usage-status">No usage data yet</div>
+      <div class="usage-status">{{ 'No usage data yet' | translate }}</div>
     } @else {
       @if (usage(); as u) {
-        <div class="usage-card" role="region" aria-label="Usage details">
-          <h3>Usage Overview</h3>
+        <div class="usage-card" role="region" [attr.aria-label]="'Usage details' | translate">
+          <h3>{{ 'Usage Overview' | translate }}</h3>
           <div class="metrics-grid">
             <div class="metric-item">
-              <span class="label">Requests Used Today</span>
+              <span class="label">{{ 'Requests Used Today' | translate }}</span>
               <span class="value">{{ u.currentRequests }} / {{ u.limitRequests }}</span>
               <div class="progress-bar">
                 <div class="fill" [style.width.%]="requestPercent()"></div>
@@ -29,12 +31,12 @@ import { UserUsage } from '../../../core/usage.service';
             </div>
             
             <div class="metric-item">
-              <span class="label">Estimated Cost</span>
+              <span class="label">{{ 'Estimated Cost' | translate }}</span>
               <span class="value">{{ formattedCost() }}</span>
             </div>
 
             <div class="metric-item">
-              <span class="label">Remaining Budget</span>
+              <span class="label">{{ 'Remaining Budget' | translate }}</span>
               <span class="value">{{ formattedRemaining() }}</span>
               <div class="progress-bar">
                 <div class="fill green" [style.width.%]="costPercentRemaining()"></div>

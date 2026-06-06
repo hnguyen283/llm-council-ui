@@ -1,24 +1,26 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../../core/auth.service';
+import { LocaleService } from '../../../core/locale.service';
 
 @Component({
   selector: 'app-password-change-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   template: `
     <div class="password-form-container">
-      <h3>Security & Password</h3>
+      <h3>{{ 'Security & Password' | translate }}</h3>
 
       @if (loginMethod() === 'google') {
         <div class="google-only-msg" role="status">
           <span class="icon">ℹ️</span>
-          <p>Password login is not enabled for this account (authenticated via Google SSO).</p>
+          <p>{{ 'Password login is not enabled for this account (authenticated via Google SSO).' | translate }}</p>
         </div>
       } @else {
-        <form (submit)="submit($event)" aria-label="Change password form">
+        <form (submit)="submit($event)" [attr.aria-label]="'Change password form' | translate">
           <div class="form-group">
-            <label for="current-password">Current Password</label>
+            <label for="current-password">{{ 'Current Password' | translate }}</label>
             <input
               type="password"
               id="current-password"
@@ -31,7 +33,7 @@ import { AuthService } from '../../../core/auth.service';
           </div>
 
           <div class="form-group">
-            <label for="new-password">New Password (min 12 chars)</label>
+            <label for="new-password">{{ 'New Password (min 12 chars)' | translate }}</label>
             <input
               type="password"
               id="new-password"
@@ -44,7 +46,7 @@ import { AuthService } from '../../../core/auth.service';
           </div>
 
           <div class="form-group">
-            <label for="confirm-password">Confirm New Password</label>
+            <label for="confirm-password">{{ 'Confirm New Password' | translate }}</label>
             <input
               type="password"
               id="confirm-password"
@@ -73,7 +75,7 @@ import { AuthService } from '../../../core/auth.service';
             class="primary"
             [disabled]="isFormInvalid() || saving()"
           >
-            {{ saving() ? 'Updating...' : 'Update Password' }}
+            {{ (saving() ? 'Updating...' : 'Update Password') | translate }}
           </button>
         </form>
       }
@@ -157,6 +159,7 @@ import { AuthService } from '../../../core/auth.service';
 })
 export class PasswordChangeFormComponent {
   private auth = inject(AuthService);
+  private locale = inject(LocaleService);
 
   loginMethod = this.auth.loginMethod;
 
@@ -186,18 +189,18 @@ export class PasswordChangeFormComponent {
 
     this.auth.changePassword(this.currentPassword, this.newPassword).subscribe({
       next: () => {
-        this.successMsg.set('Password updated successfully. Logging out...');
+        this.successMsg.set(this.locale.instant('Password updated successfully. Logging out...'));
         // The auth service changePassword call taps clear() which logs us out.
         // The application's auth checks will automatically redirect the user to login.
       },
       error: (err) => {
         this.saving.set(false);
         if (err.error?.code === 'AUTH_INVALID_CURRENT_PASSWORD') {
-          this.errorMsg.set('Current password is correct verification failed.');
+          this.errorMsg.set(this.locale.instant('Current password verification failed.'));
         } else if (err.error?.message) {
           this.errorMsg.set(err.error.message);
         } else {
-          this.errorMsg.set('Failed to update password. Please check your credentials.');
+          this.errorMsg.set(this.locale.instant('Failed to update password. Please check your credentials.'));
         }
       }
     });

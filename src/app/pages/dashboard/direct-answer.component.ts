@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { FinalReport } from '../../core/jobs.service';
 
 /**
@@ -16,21 +17,22 @@ import { FinalReport } from '../../core/jobs.service';
 @Component({
   selector: 'app-direct-answer',
   standalone: true,
+  imports: [TranslateModule],
   template: `
     @if (visible()) {
-      <section class="direct-answer-card" aria-label="Direct answer">
+      <section class="direct-answer-card" [attr.aria-label]="'Direct answer' | translate">
         <div class="da-header">
-          <h2>Direct answer</h2>
+          <h2>{{ 'Direct answer' | translate }}</h2>
           <span
             class="da-confidence da-confidence-{{ confidenceClass() }}"
-            [title]="'Overall report confidence: ' + (report()?.confidence ?? 'LOW')"
+            [title]="'Overall report confidence: {{confidence}}' | translate:{ confidence: report()?.confidence ?? 'LOW' }"
           >
-            {{ report()?.confidence }} confidence
+            {{ report()?.confidence }} {{ 'confidence' | translate }}
           </span>
         </div>
         <p class="da-body">{{ report()?.directAnswer }}</p>
         <p class="da-hint">
-          Source list and supporting evidence are shown below.
+          {{ 'Source list and supporting evidence are shown below.' | translate }}
         </p>
       </section>
     }

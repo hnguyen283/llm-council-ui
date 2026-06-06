@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
 /**
  * Static page shown when an account is locked or disabled.
@@ -12,14 +13,14 @@ import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-locked',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslateModule],
   template: `
     <div class="wrap">
       <div class="card">
-        <h1>Account locked</h1>
-        <p>Your account is temporarily locked.</p>
-        <p>Try again in a few minutes, or contact an administrator if the lock persists.</p>
-        <a routerLink="/login" class="link">Back to sign in</a>
+        <h1>{{ 'Account locked' | translate }}</h1>
+        <p>{{ 'Your account is temporarily locked.' | translate }}</p>
+        <p>{{ 'Try again in a few minutes, or contact an administrator if the lock persists.' | translate }}</p>
+        <a routerLink="/login" class="link">{{ 'Back to sign in' | translate }}</a>
       </div>
     </div>
   `,

@@ -1,5 +1,6 @@
 import { Component, input, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { JobStatus } from '../../../core/jobs.service';
 
 export interface StageTiming {
@@ -12,7 +13,7 @@ export interface StageTiming {
 @Component({
   selector: 'app-request-details-accordion',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   template: `
     @if (status(); as s) {
       <div class="details-container">
@@ -25,9 +26,9 @@ export interface StageTiming {
           aria-controls="main-details-content"
         >
           <span class="chevron" [class.open]="isMainExpanded()" aria-hidden="true">&#9656;</span>
-          <span>Advanced Request Details</span>
+          <span>{{ 'Advanced Request Details' | translate }}</span>
           <span class="badge" *ngIf="s.result?.sources?.length">
-            {{ s.result?.sources?.length }} Sources
+            {{ 'Sources count' | translate:{ count: s.result?.sources?.length } }}
           </span>
         </button>
 
@@ -48,7 +49,7 @@ export interface StageTiming {
                 aria-controls="findings-content"
               >
                 <span class="chevron" [class.open]="isFindingsExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>Key Findings ({{ s.result?.keyFindings?.length }})</h4>
+                <h4>{{ 'Key Findings ({{count}})' | translate:{ count: s.result?.keyFindings?.length } }}</h4>
               </button>
               
               <div 
@@ -76,7 +77,7 @@ export interface StageTiming {
                 aria-controls="sources-content"
               >
                 <span class="chevron" [class.open]="isSourcesExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>Sources &amp; Citations</h4>
+                <h4>{{ 'Sources & Citations' | translate }}</h4>
               </button>
               
               <div 
@@ -87,10 +88,10 @@ export interface StageTiming {
                 <table>
                   <thead>
                     <tr>
-                      <th scope="col">Tier</th>
-                      <th scope="col">Score</th>
+                      <th scope="col">{{ 'Tier' | translate }}</th>
+                      <th scope="col">{{ 'Score' | translate }}</th>
                       <th scope="col">URL</th>
-                      <th scope="col">Rationale</th>
+                      <th scope="col">{{ 'Rationale' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -140,7 +141,7 @@ export interface StageTiming {
                 aria-controls="timings-content"
               >
                 <span class="chevron" [class.open]="isTimingsExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>Step-by-step Execution Timings</h4>
+                <h4>{{ 'Step-by-step Execution Timings' | translate }}</h4>
               </button>
               
               <div 
@@ -171,7 +172,7 @@ export interface StageTiming {
                 aria-controls="telemetry-content"
               >
                 <span class="chevron" [class.open]="isTelemetryExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>Diagnostics &amp; Raw State</h4>
+                <h4>{{ 'Diagnostics & Raw State' | translate }}</h4>
               </button>
               
               <div 
@@ -181,24 +182,24 @@ export interface StageTiming {
               >
                 <div class="telemetry-grid">
                   <div class="telemetry-item">
-                    <span class="label">Job ID</span>
+                    <span class="label">{{ 'Job ID' | translate }}</span>
                     <span class="value select-all">{{ s.jobId }}</span>
                   </div>
                   <div class="telemetry-item">
-                    <span class="label">Current State</span>
+                    <span class="label">{{ 'Current State' | translate }}</span>
                     <span class="value">{{ s.state }}</span>
                   </div>
                   <div class="telemetry-item">
-                    <span class="label">Current Stage</span>
+                    <span class="label">{{ 'Current Stage' | translate }}</span>
                     <span class="value">{{ s.stage }}</span>
                   </div>
                   <div class="telemetry-item">
-                    <span class="label">Last Updated</span>
+                    <span class="label">{{ 'Last Updated' | translate }}</span>
                     <span class="value">{{ s.updatedAt }}</span>
                   </div>
                 </div>
                 <details class="raw-json-details">
-                  <summary>View raw JSON response</summary>
+                  <summary>{{ 'View raw JSON response' | translate }}</summary>
                   <pre class="raw-json"><code>{{ s | json }}</code></pre>
                 </details>
               </div>

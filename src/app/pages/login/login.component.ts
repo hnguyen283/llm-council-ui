@@ -2,8 +2,10 @@ import { Component, computed, inject, signal, OnInit, AfterViewInit, NgZone } fr
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
+import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
 import { AuthCode } from '../../core/error.codes';
+import { LocaleService } from '../../core/locale.service';
 
 declare var google: any;
 
@@ -16,12 +18,12 @@ declare var google: any;
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, TranslateModule],
   template: `
     <div class="wrap">
       <div class="card">
-        <h1>LLM Council</h1>
-        <p class="subtitle">Sign in to run multi-model research jobs</p>
+        <h1>{{ 'LLM Council' | translate }}</h1>
+        <p class="subtitle">{{ 'Sign in to run multi-model research jobs' | translate }}</p>
 
         @if (banner()) {
           <div class="banner" [class.success]="banner()!.kind === 'success'">
@@ -31,11 +33,11 @@ declare var google: any;
 
         <form (ngSubmit)="submit()">
           <label>
-            <span>Username</span>
+            <span>{{ 'Username' | translate }}</span>
             <input type="text" [(ngModel)]="username" name="username" autocomplete="username" required [disabled]="busy()" />
           </label>
           <label>
-            <span>Password</span>
+            <span>{{ 'Password' | translate }}</span>
             <input type="password" [(ngModel)]="password" name="password" autocomplete="current-password" required [disabled]="busy()" />
           </label>
 
@@ -44,17 +46,17 @@ declare var google: any;
           }
 
           <button class="primary" type="submit" [disabled]="busy()">
-            {{ busy() ? 'Signing in...' : 'Sign in' }}
+            {{ (busy() ? 'Signing in...' : 'Sign in') | translate }}
           </button>
         </form>
 
-        <div class="divider"><span>OR</span></div>
+        <div class="divider"><span>{{ 'OR' | translate }}</span></div>
 
         <div class="google-btn-wrapper">
           <div id="google-login-btn"></div>
         </div>
 
-        <p class="hint">No account yet? <a routerLink="/signup">Create one</a></p>
+        <p class="hint">{{ 'No account yet?' | translate }} <a routerLink="/signup">{{ 'Create one' | translate }}</a></p>
       </div>
     </div>
   `,
@@ -107,6 +109,7 @@ export class LoginComponent implements OnInit, AfterViewInit {
   private router = inject(Router);
   private route  = inject(ActivatedRoute);
   private ngZone = inject(NgZone);
+  private locale = inject(LocaleService);
 
   username = '';
   password = '';
@@ -117,14 +120,14 @@ export class LoginComponent implements OnInit, AfterViewInit {
   banner = computed(() => {
     const reason = this.route.snapshot.queryParamMap.get('reason');
     switch (reason) {
-      case 'expired':    return { kind: 'info' as const,    text: 'Your session expired. Please sign in again.' };
-      case 'displaced':  return { kind: 'info' as const,    text: 'You were signed in on another device.' };
-      case 'reused':     return { kind: 'info' as const,    text: 'For your security we ended this session. Please sign in again.' };
-      case 'locked':     return { kind: 'info' as const,    text: 'Account locked. Try again in 15 minutes, or contact an administrator.' };
-      case 'disabled':   return { kind: 'info' as const,    text: 'This account has been disabled. Contact support if this is unexpected.' };
-      case 'stale':      return { kind: 'info' as const,    text: 'Your access has changed. Please sign in again.' };
-      case 'logged_out': return { kind: 'info' as const,    text: 'You have been signed out.' };
-      case 'signed_up':  return { kind: 'success' as const, text: 'Account created. Sign in below.' };
+      case 'expired':    return { kind: 'info' as const,    text: this.locale.instant('Your session expired. Please sign in again.') };
+      case 'displaced':  return { kind: 'info' as const,    text: this.locale.instant('You were signed in on another device.') };
+      case 'reused':     return { kind: 'info' as const,    text: this.locale.instant('For your security we ended this session. Please sign in again.') };
+      case 'locked':     return { kind: 'info' as const,    text: this.locale.instant('Account locked. Try again in 15 minutes, or contact an administrator.') };
+      case 'disabled':   return { kind: 'info' as const,    text: this.locale.instant('This account has been disabled. Contact support if this is unexpected.') };
+      case 'stale':      return { kind: 'info' as const,    text: this.locale.instant('Your access has changed. Please sign in again.') };
+      case 'logged_out': return { kind: 'info' as const,    text: this.locale.instant('You have been signed out.') };
+      case 'signed_up':  return { kind: 'success' as const, text: this.locale.instant('Account created. Sign in below.') };
       default:           return null;
     }
   });
@@ -182,10 +185,10 @@ export class LoginComponent implements OnInit, AfterViewInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          let message = 'Failed to sign in with Google.';
+          let message = this.locale.instant('Failed to sign in with Google.');
           const body = err.error;
           if (err.status === 403) {
-            message = 'Access denied. Sign-in is restricted to authorized email domains.';
+            message = this.locale.instant('Access denied. Sign-in is restricted to authorized email domains.');
           } else if (body && typeof body === 'object' && body.message) {
             message = body.message;
           }
@@ -208,12 +211,12 @@ export class LoginComponent implements OnInit, AfterViewInit {
           ? err.error as { code?: unknown }
           : null;
         const code = err.headers?.get('X-Auth-Code') || (typeof body?.code === 'string' ? body.code : null);
-        if (code === AuthCode.LOCKED)        this.error.set('Account is locked or disabled.');
-        else if (code === AuthCode.INVALID || err.status === 401) this.error.set('Username or password is incorrect.');
-        else if (err.status === 403)         this.error.set('Access denied. Please sign in with an allowed account.');
-        else if (err.status === 0)           this.error.set('Gateway is unreachable. Check that the public API endpoint is reachable.');
-        else if (err.status === 503 || err.status >= 500) this.error.set('Authentication is temporarily unavailable. Please try again shortly.');
-        else                                  this.error.set('Sign-in failed. Please try again.');
+        if (code === AuthCode.LOCKED)        this.error.set(this.locale.instant('Account is locked or disabled.'));
+        else if (code === AuthCode.INVALID || err.status === 401) this.error.set(this.locale.instant('Username or password is incorrect.'));
+        else if (err.status === 403)         this.error.set(this.locale.instant('Access denied. Please sign in with an allowed account.'));
+        else if (err.status === 0)           this.error.set(this.locale.instant('Gateway is unreachable. Check that the public API endpoint is reachable.'));
+        else if (err.status === 503 || err.status >= 500) this.error.set(this.locale.instant('Authentication is temporarily unavailable. Please try again shortly.'));
+        else                                  this.error.set(this.locale.instant('Sign-in failed. Please try again.'));
         
         if (code === AuthCode.INVALID || err.status === 401) this.password = '';
       }

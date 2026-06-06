@@ -11,6 +11,7 @@
     "start:https:lan": "ng serve --host 0.0.0.0 --port 4200 --ssl --ssl-cert ssl/cert.pem --ssl-key ssl/key.pem --proxy-config proxy.https.conf.cjs",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
+    "i18n-check": "node scripts/check-i18n.js",
     "license-check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn 'AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0;SSPL;RSALv2;Confluent Community License;BUSL-1.1;Elastic-License;Elastic-2.0;Custom: redis.io/legal/licenses;Custom: https://redis.io/legal/licenses' --excludePackages 'llm-council-ui@0.1.0'"
   },
   "dependencies": {
@@ -22,6 +23,8 @@
     "@angular/platform-browser": "^18.2.0",
     "@angular/platform-browser-dynamic": "^18.2.0",
     "@angular/router": "^18.2.0",
+    "@ngx-translate/core": "^15.0.0",
+    "@ngx-translate/http-loader": "^8.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.14.10"

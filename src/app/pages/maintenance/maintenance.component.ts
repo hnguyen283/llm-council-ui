@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 
 /**
  * Static page shown when the authentication backend returns
@@ -11,12 +12,13 @@ import { Component } from '@angular/core';
 @Component({
   selector: 'app-maintenance',
   standalone: true,
+  imports: [TranslateModule],
   template: `
     <div class="wrap">
       <div class="card">
-        <h1>Temporarily unavailable</h1>
-        <p>Authentication is temporarily unavailable.</p>
-        <p>Please try again in a few minutes.</p>
+        <h1>{{ 'Temporarily unavailable' | translate }}</h1>
+        <p>{{ 'Authentication is temporarily unavailable.' | translate }}</p>
+        <p>{{ 'Please try again in a few minutes.' | translate }}</p>
       </div>
     </div>
   `,

@@ -1,12 +1,12 @@
 import { Injectable, signal } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
 
 /**
- * Locale codes accepted by the backend. The strings must match the
- * locale columns recognised by the prompt service; adding a new locale
- * here without a matching column in the source data will simply fall
- * back to the default locale at lookup time.
+ * Locale codes accepted by the backend. These values still match the
+ * prompt-service locale columns and the `/jobs` request contract.
  */
 export type LocaleCode = 'en_US' | 'vn_VN';
+export type UiLanguageCode = 'en' | 'vi';
 
 /** Display metadata for the language switcher chip. */
 export interface LocaleOption {
@@ -20,58 +20,110 @@ export interface LocaleOption {
 /** Locale options exposed by the in-app language switcher. */
 export const LOCALES: LocaleOption[] = [
   { code: 'en_US', label: 'English',    short: 'EN' },
-  { code: 'vn_VN', label: 'Tiếng Việt', short: 'VN' }
+  { code: 'vn_VN', label: 'Tieng Viet', short: 'VI' }
 ];
 
-/** Browser-storage key used to persist the chosen locale across sessions. */
-const STORAGE_KEY = 'llm-council.locale';
-
-/** Locale used when no preference is recorded in browser storage. */
-const DEFAULT_LOCALE: LocaleCode = 'en_US';
+const LEGACY_LOCALE_STORAGE_KEY = 'llm-council.locale';
+const LANGUAGE_STORAGE_KEY = 'llm-council.ui-language';
 
 /**
- * Singleton service that holds the active UI locale and forwards it
- * to the backend on every job submission.
+ * Singleton service that owns UI language and backend locale mapping.
  *
- * The current value is exposed as a signal so components re-render
- * automatically when the user switches language. The choice is
- * persisted to browser storage so reloads keep the previous selection.
+ * UI translation catalogs use standard language tags (`en`, `vi`), while
+ * job submission keeps the existing backend locale contract (`en_US`,
+ * `vn_VN`). The service also migrates the legacy locale storage value so
+ * current users keep their previous language preference.
  */
 @Injectable({ providedIn: 'root' })
 export class LocaleService {
-  private readonly _locale = signal<LocaleCode>(this.readInitial());
+  private readonly _language = signal<UiLanguageCode>(this.readInitialLanguage());
 
-  /** Readable signal that emits the active locale. */
-  readonly locale = this._locale.asReadonly();
+  /** Readable signal that emits the active UI language. */
+  readonly language = this._language.asReadonly();
 
-  /** Synchronous accessor for non-reactive callers. */
-  current(): LocaleCode {
-    return this._locale();
+  /** Readable signal that emits the active backend job locale. */
+  readonly locale = signal<LocaleCode>(this.toBackendLocale(this._language()));
+
+  constructor(private readonly translate: TranslateService) {
+    this.translate.addLangs(['en', 'vi']);
+    this.translate.setDefaultLang('en');
+    this.useLanguage(this._language(), false);
   }
 
-  /** Switches to the supplied locale and persists the choice. */
-  set(code: LocaleCode): void {
-    if (code === this._locale()) return;
-    this._locale.set(code);
-    try { localStorage.setItem(STORAGE_KEY, code); } catch { /* private mode etc. */ }
+  /** Synchronous accessor for non-reactive callers that need the backend locale. */
+  current(): LocaleCode {
+    return this.locale();
+  }
+
+  /** Synchronous accessor for non-reactive callers that need the UI language. */
+  currentLanguage(): UiLanguageCode {
+    return this._language();
+  }
+
+  /** Switches to the supplied locale/language and persists the choice. */
+  set(code: LocaleCode | UiLanguageCode | string): void {
+    const lang = this.normalizeLanguage(code);
+    if (lang === this._language()) return;
+    this.useLanguage(lang, true);
   }
 
   /** Cycles through the available locales for the simple chip switcher. */
   cycle(): void {
-    const i = LOCALES.findIndex(l => l.code === this._locale());
+    const i = LOCALES.findIndex(l => l.code === this.locale());
     const next = LOCALES[(i + 1) % LOCALES.length];
     this.set(next.code);
   }
 
-  /**
-   * Reads the persisted locale from browser storage, falling back to
-   * the default when nothing is stored or the stored value is unknown.
-   */
-  private readInitial(): LocaleCode {
+  instant(key: string, params?: Record<string, unknown>): string {
+    return this.translate.instant(key, params);
+  }
+
+  private readInitialLanguage(): UiLanguageCode {
     try {
-      const v = localStorage.getItem(STORAGE_KEY);
-      if (v && LOCALES.some(l => l.code === v)) return v as LocaleCode;
+      const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (savedLanguage) return this.normalizeLanguage(savedLanguage);
+
+      const legacyLocale = localStorage.getItem(LEGACY_LOCALE_STORAGE_KEY);
+      if (legacyLocale) return this.normalizeLanguage(legacyLocale);
     } catch { /* private mode etc. */ }
-    return DEFAULT_LOCALE;
+
+    const languages = this.browserLanguages();
+    if (languages.some(lang => lang === 'vi' || lang.startsWith('vi-') || lang === 'vn' || lang.startsWith('vn-'))) {
+      return 'vi';
+    }
+    return 'en';
+  }
+
+  private useLanguage(lang: UiLanguageCode, persist: boolean): void {
+    const locale = this.toBackendLocale(lang);
+    this._language.set(lang);
+    this.locale.set(locale);
+    this.translate.use(lang);
+    document.documentElement.lang = lang;
+    if (!persist) return;
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+      localStorage.setItem(LEGACY_LOCALE_STORAGE_KEY, locale);
+    } catch { /* private mode etc. */ }
+  }
+
+  private normalizeLanguage(code: LocaleCode | UiLanguageCode | string): UiLanguageCode {
+    const normalized = String(code).trim().toLowerCase().replace('_', '-');
+    if (normalized === 'vn-vn' || normalized === 'vi-vn' || normalized === 'vi' || normalized === 'vn' || normalized.startsWith('vi-')) {
+      return 'vi';
+    }
+    return 'en';
+  }
+
+  private toBackendLocale(lang: UiLanguageCode): LocaleCode {
+    return lang === 'vi' ? 'vn_VN' : 'en_US';
+  }
+
+  private browserLanguages(): string[] {
+    const nav = window.navigator;
+    const values = Array.isArray(nav.languages) && nav.languages.length > 0
+      ? nav.languages
+      : [nav.language];
+    return values.filter(Boolean).map(value => value.toLowerCase());
   }
 }

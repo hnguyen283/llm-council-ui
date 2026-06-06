@@ -1,8 +1,9 @@
-import { Component, input, output, model, signal, computed, HostListener, effect } from '@angular/core';
+import { Component, input, output, model, signal, computed, HostListener, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { PromptCacheEntry } from '../../../core/prompt-cache.service';
-import { LOCALES } from '../../../core/locale.service';
+import { LOCALES, LocaleService } from '../../../core/locale.service';
 import { PasswordChangeFormComponent } from './password-change-form.component';
 import { UsageSummaryCardComponent } from './usage-summary-card.component';
 import { UserUsage } from '../../../core/usage.service';
@@ -10,7 +11,7 @@ import { UserUsage } from '../../../core/usage.service';
 @Component({
   selector: 'app-history-sidebar',
   standalone: true,
-  imports: [CommonModule, FormsModule, PasswordChangeFormComponent, UsageSummaryCardComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, PasswordChangeFormComponent, UsageSummaryCardComponent],
   template: `
     <!-- Backdrop Overlay for Mobile -->
     @if (isOpen()) {
@@ -25,17 +26,17 @@ import { UserUsage } from '../../../core/usage.service';
       class="sidebar-container" 
       [class.open]="isOpen()"
       id="history-drawer"
-      aria-label="Research history"
+      [attr.aria-label]="'Research history' | translate"
       [attr.aria-hidden]="!isOpen()"
     >
       <!-- Compressed Header -->
       <div class="sidebar-header">
-        <h2>Research History</h2>
+        <h2>{{ 'Research History' | translate }}</h2>
         <button 
           type="button" 
           class="close-btn" 
           (click)="closeSidebar()" 
-          aria-label="Close research history"
+          [attr.aria-label]="'Close research history' | translate"
           [attr.aria-expanded]="isOpen()"
           aria-controls="history-drawer"
         >
@@ -46,27 +47,27 @@ import { UserUsage } from '../../../core/usage.service';
       <!-- Compressed Search and Filters Section -->
       <div class="filters-section">
         <div class="search-box">
-          <label for="history-search" class="sr-only">Search prompts</label>
+          <label for="history-search" class="sr-only">{{ 'Search prompts' | translate }}</label>
           <input 
             type="text" 
             id="history-search" 
             [(ngModel)]="searchQuery" 
-            placeholder="Search prompts..." 
-            aria-label="Search prompts"
+            [placeholder]="'Search prompts...' | translate"
+            [attr.aria-label]="'Search prompts' | translate"
           />
         </div>
         <div class="filter-box">
-          <label for="status-filter" class="sr-only">Filter by status</label>
+          <label for="status-filter" class="sr-only">{{ 'Filter by status' | translate }}</label>
           <select 
             id="status-filter" 
             [(ngModel)]="selectedStatus" 
-            aria-label="Filter by status"
+            [attr.aria-label]="'Filter by status' | translate"
           >
-            <option value="ALL">All Statuses</option>
-            <option value="DONE">Completed</option>
-            <option value="RUNNING">Running</option>
-            <option value="FAILED">Failed</option>
-            <option value="CANCELED">Canceled</option>
+            <option value="ALL">{{ 'All Statuses' | translate }}</option>
+            <option value="DONE">{{ 'Completed' | translate }}</option>
+            <option value="RUNNING">{{ 'Running' | translate }}</option>
+            <option value="FAILED">{{ 'Failed' | translate }}</option>
+            <option value="CANCELED">{{ 'Canceled' | translate }}</option>
           </select>
         </div>
       </div>
@@ -74,7 +75,7 @@ import { UserUsage } from '../../../core/usage.service';
       <!-- Compressed History Items List -->
       <div class="history-list" role="list">
         @if (filteredQueries().length === 0) {
-          <div class="empty-state">No history items found.</div>
+          <div class="empty-state">{{ 'No history items found.' | translate }}</div>
         } @else {
           @for (item of filteredQueries(); track item.timestamp) {
             <button 
@@ -82,7 +83,7 @@ import { UserUsage } from '../../../core/usage.service';
               class="history-item" 
               role="listitem"
               (click)="selectItem(item)"
-              [attr.aria-label]="'Reopen research for: ' + item.query"
+              [attr.aria-label]="'Reopen research for: {{query}}' | translate:{ query: item.query }"
             >
               <div class="item-main">
                 <span class="item-title">{{ item.query }}</span>
@@ -104,15 +105,15 @@ import { UserUsage } from '../../../core/usage.service';
 
         <!-- Language Switcher Row -->
         <div class="footer-row lang-row">
-          <span class="footer-label">Language:</span>
-          <div class="lang-buttons" role="group" aria-label="Language Switcher">
+          <span class="footer-label">{{ 'Language:' | translate }}</span>
+          <div class="lang-buttons" role="group" [attr.aria-label]="'Language Switcher' | translate">
             @for (l of locales(); track l.code) {
               <button
                 type="button"
                 class="lang-btn"
                 [class.active]="locale() === l.code"
                 (click)="setLocale.emit(l.code)"
-                [title]="l.label"
+                [title]="l.label | translate"
               >
                 {{ l.short }}
               </button>
@@ -129,7 +130,7 @@ import { UserUsage } from '../../../core/usage.service';
             (click)="toggleUsage()"
           >
             <span class="chevron" [class.open]="usageExpanded()" aria-hidden="true">&#9656;</span>
-            <span>Usage Overview</span>
+            <span>{{ 'Usage Overview' | translate }}</span>
           </button>
           @if (usageExpanded()) {
             <div class="footer-collapsible-content">
@@ -151,14 +152,14 @@ import { UserUsage } from '../../../core/usage.service';
             (click)="toggleSettings()"
           >
             <span class="chevron" [class.open]="settingsExpanded()" aria-hidden="true">&#9656;</span>
-            <span>Account Settings ⚙</span>
+            <span>{{ 'Account Settings' | translate }}</span>
           </button>
           @if (settingsExpanded()) {
             <div class="footer-collapsible-content">
               <div class="profile-compact-details">
-                <div><span class="lbl">User:</span> <span class="val">{{ username() || 'N/A' }}</span></div>
-                <div><span class="lbl">Email:</span> <span class="val">{{ email() || 'N/A' }}</span></div>
-                <div><span class="lbl">Method:</span> <span class="val capitalize">{{ loginMethod() || 'Password' }}</span></div>
+                <div><span class="lbl">{{ 'User:' | translate }}</span> <span class="val">{{ username() || 'N/A' }}</span></div>
+                <div><span class="lbl">{{ 'Email:' | translate }}</span> <span class="val">{{ email() || 'N/A' }}</span></div>
+                <div><span class="lbl">{{ 'Method:' | translate }}</span> <span class="val capitalize">{{ (loginMethod() || 'Password') | translate }}</span></div>
               </div>
               <app-password-change-form></app-password-change-form>
             </div>
@@ -167,7 +168,7 @@ import { UserUsage } from '../../../core/usage.service';
 
         <!-- Logout Button -->
         <button (click)="logout.emit()" class="footer-logout-btn">
-          Log Out
+          {{ 'Log Out' | translate }}
         </button>
       </div>
     </nav>
@@ -553,6 +554,8 @@ import { UserUsage } from '../../../core/usage.service';
   `]
 })
 export class HistorySidebarComponent {
+  private localeService = inject(LocaleService);
+
   recentQueries = input<PromptCacheEntry[]>([]);
   isOpen = model(false);
   
@@ -638,12 +641,19 @@ export class HistorySidebarComponent {
     if (item.status.quickAnswer) {
       return item.status.quickAnswer;
     }
-    return 'No answer preview available.';
+    return this.localeService.instant('No answer preview available.');
   }
 
   getStatusLabel(state: string): string {
-    if (state === 'CANCEL_REQUESTED') return 'Canceling';
-    return state;
+    switch (state) {
+      case 'DONE': return this.localeService.instant('Completed');
+      case 'RUNNING': return this.localeService.instant('Running');
+      case 'PENDING': return this.localeService.instant('Preparing');
+      case 'FAILED': return this.localeService.instant('Failed');
+      case 'CANCELED': return this.localeService.instant('Canceled');
+      case 'CANCEL_REQUESTED': return this.localeService.instant('Canceling');
+      default: return state;
+    }
   }
 
   getLocaleLabel(code: string): string {
@@ -654,12 +664,12 @@ export class HistorySidebarComponent {
     const t = Date.parse(timestamp);
     if (Number.isNaN(t)) return '';
     const deltaSec = Math.max(0, Math.round((Date.now() - t) / 1000));
-    if (deltaSec < 1) return 'just now';
-    if (deltaSec < 60) return `${deltaSec}s ago`;
+    if (deltaSec < 1) return this.localeService.instant('just now');
+    if (deltaSec < 60) return this.localeService.instant('{{count}}s ago', { count: deltaSec });
     const m = Math.floor(deltaSec / 60);
-    if (m < 60) return `${m}m ago`;
+    if (m < 60) return this.localeService.instant('{{count}}m ago', { count: m });
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return new Date(t).toLocaleDateString();
+    if (h < 24) return this.localeService.instant('{{count}}h ago', { count: h });
+    return new Date(t).toLocaleDateString(this.localeService.currentLanguage());
   }
 }

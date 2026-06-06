@@ -2,6 +2,7 @@ import { Component, inject, signal, computed, OnDestroy, OnInit } from '@angular
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { JobsService, JobStatus } from '../../core/jobs.service';
@@ -21,6 +22,7 @@ import { UsageService } from '../../core/usage.service';
   standalone: true,
   imports: [
     FormsModule,
+    TranslateModule,
     DirectAnswerComponent,
     HistorySidebarComponent,
     QuickAnswerCardComponent,
@@ -54,13 +56,13 @@ import { UsageService } from '../../core/usage.service';
               type="button" 
               class="icon-btn menu-btn" 
               (click)="historyOpen.set(true)" 
-              aria-label="Open research history"
+              [attr.aria-label]="'Open research history' | translate"
               [attr.aria-expanded]="historyOpen()"
               aria-controls="history-drawer"
             >
               ☰
             </button>
-            <div class="brand">LLM Council</div>
+            <div class="brand">{{ 'LLM Council' | translate }}</div>
           </div>
         </header>
 
@@ -68,18 +70,18 @@ import { UsageService } from '../../core/usage.service';
         <main id="main-content" class="main-panel">
           @if (usageService.usage()?.warningActive) {
             <div class="user-quota-warning-banner" role="alert">
-              ⚠️ {{ usageService.usage()?.warningMessage }} (Remaining requests today: {{ usageService.usage()?.remainingRequests }})
+              ⚠️ {{ usageService.usage()?.warningMessage }} ({{ 'Remaining requests today:' | translate }} {{ usageService.usage()?.remainingRequests }})
             </div>
           }
 
           <!-- Query Input Section -->
           <section class="query-card">
-            <label class="query-label" for="prompt-textarea">Research question</label>
+            <label class="query-label" for="prompt-textarea">{{ 'Research question' | translate }}</label>
             <textarea
               id="prompt-textarea"
               [(ngModel)]="query"
               rows="2"
-              placeholder="e.g. Is intermittent fasting effective for weight loss?"
+              [placeholder]="'e.g. Is intermittent fasting effective for weight loss?' | translate"
               [disabled]="isRunning()"
             ></textarea>
             
@@ -89,7 +91,7 @@ import { UsageService } from '../../core/usage.service';
                 (click)="run()"
                 [disabled]="!query.trim() || isRunning()"
               >
-                {{ isRunning() ? 'Running...' : 'Run research' }}
+                {{ (isRunning() ? 'Running...' : 'Run research') | translate }}
               </button>
               
               @if (isRunning() && hasActiveJob()) {
@@ -99,15 +101,15 @@ import { UsageService } from '../../core/usage.service';
                   (click)="cancel()"
                   [disabled]="canceling()"
                 >
-                  {{ canceling() ? 'Canceling...' : 'Cancel' }}
+                  {{ (canceling() ? 'Canceling...' : 'Cancel') | translate }}
                 </button>
               }
               
               @if (status() && !isRunning()) {
-                <button (click)="reset()">Clear</button>
+                <button (click)="reset()">{{ 'Clear' | translate }}</button>
               }
               
-              <span class="lang-hint">Prompts in {{ activeLocaleLabel() }}</span>
+              <span class="lang-hint">{{ 'Prompts in {{language}}' | translate:{ language: activeLocaleLabel() } }}</span>
             </div>
           </section>
 
@@ -115,7 +117,7 @@ import { UsageService } from '../../core/usage.service';
           @if (status(); as s) {
             <section class="progress-card">
               <div class="meta">
-                <h2>Progress</h2>
+                <h2>{{ 'Progress' | translate }}</h2>
                 <span
                   class="state state-{{ s.state.toLowerCase() }}"
                   [class.pulsing]="s.state === 'RUNNING' || s.state === 'PENDING' || s.state === 'CANCEL_REQUESTED'"
@@ -126,17 +128,17 @@ import { UsageService } from '../../core/usage.service';
                 <span class="stage-text" aria-live="polite">{{ s.stage }}</span>
                 
                 <span class="stage-meta">
-                  <span class="update-count" [title]="'Backend updates received: ' + updateCount()">
+                  <span class="update-count" [title]="'Backend updates received: {{count}}' | translate:{ count: updateCount() }">
                     #{{ updateCount() }}
                   </span>
                   
                   @if (isRunning()) {
                     <span class="total-time" aria-live="off">
-                      Time: {{ runningTotalTimeText() }}
+                      {{ 'Time:' | translate }} {{ runningTotalTimeText() }}
                     </span>
                   } @else if (s.state === 'DONE' && totalTimeText()) {
                     <span class="total-time">
-                      Total Time: {{ totalTimeText() }}
+                      {{ 'Total Time:' | translate }} {{ totalTimeText() }}
                     </span>
                   }
                 </span>
@@ -157,15 +159,15 @@ import { UsageService } from '../../core/usage.service';
 
             <section class="report">
               <div class="report-header">
-                <h2>Final report</h2>
+                <h2>{{ 'Final report' | translate }}</h2>
                 <span class="confidence confidence-{{ report.confidence.toLowerCase() }}">
-                  {{ report.confidence }} confidence
+                  {{ report.confidence }} {{ 'confidence' | translate }}
                 </span>
               </div>
 
               @if (report.degradationNotes && report.degradationNotes.length > 0) {
                 <div class="pipeline-notes" role="status">
-                  <h3>Run notes</h3>
+                  <h3>{{ 'Run notes' | translate }}</h3>
                   <ul>
                     @for (note of report.degradationNotes; track note) {
                       <li>{{ note }}</li>
@@ -175,9 +177,9 @@ import { UsageService } from '../../core/usage.service';
               }
 
               <div class="block">
-                <h3>Conflicts &amp; contradictions</h3>
+                <h3>{{ 'Conflicts & contradictions' | translate }}</h3>
                 @if (report.conflicts.length === 0) {
-                  <p class="dim">None detected.</p>
+                  <p class="dim">{{ 'None detected.' | translate }}</p>
                 } @else {
                   <ul>
                     @for (c of report.conflicts; track c) { <li>{{ c }}</li> }
@@ -670,7 +672,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   locale = this.localeService.locale;
   activeLocaleLabel = computed(() => {
     const code = this.localeService.locale();
-    return LOCALES.find(l => l.code === code)?.label ?? code;
+    const label = LOCALES.find(l => l.code === code)?.label ?? code;
+    return this.localeService.instant(label);
   });
 
   updateCount = signal(0);
@@ -713,16 +716,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (state === 'RUNNING') {
       const stage = this.status()?.stage?.toLowerCase() || '';
       if (stage.includes('synth') || stage.includes('enhance') || stage.includes('judge')) {
-        return 'Enhancing';
+        return this.localeService.instant('Enhancing');
       }
-      return 'Researching';
+      return this.localeService.instant('Researching');
     }
     switch (state) {
-      case 'PENDING': return 'Preparing';
-      case 'DONE': return 'Completed';
-      case 'CANCELED': return 'Canceled';
-      case 'CANCEL_REQUESTED': return 'Canceling';
-      case 'FAILED': return 'Failed';
+      case 'PENDING': return this.localeService.instant('Preparing');
+      case 'DONE': return this.localeService.instant('Completed');
+      case 'CANCELED': return this.localeService.instant('Canceled');
+      case 'CANCEL_REQUESTED': return this.localeService.instant('Canceling');
+      case 'FAILED': return this.localeService.instant('Failed');
       default: return state;
     }
   }
@@ -798,7 +801,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             jobId, state: 'FAILED', stage: 'failed',
             updatedAt: new Date().toISOString(),
             result: null,
-            error: 'Request id mismatch on acceptance',
+            error: this.localeService.instant('Request id mismatch on acceptance'),
           });
           this.stopNowTicker();
           return;
@@ -826,7 +829,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           jobId: '', state: 'FAILED', stage: 'failed',
           updatedAt: new Date().toISOString(),
           result: null,
-          error: err?.message || 'Failed to submit job',
+          error: err?.message || this.localeService.instant('Failed to submit job'),
         });
         this.stopNowTicker();
       },
@@ -850,7 +853,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         if (current) {
           this.status.set({
             ...current,
-            error: err?.message || 'Cancel failed',
+            error: err?.message || this.localeService.instant('Cancel failed'),
             updatedAt: new Date().toISOString(),
           });
         }
@@ -1050,7 +1053,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (current && this.isRunning()) {
       this.status.set({
         ...current,
-        error: 'Connection interrupted. Reconnecting...',
+        error: this.localeService.instant('Connection interrupted. Reconnecting...'),
         updatedAt: new Date().toISOString(),
       });
       this.streamSub = null;

@@ -1,11 +1,13 @@
-import { Component, input, signal, computed } from '@angular/core';
+import { Component, input, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { JobStatus } from '../../../core/jobs.service';
+import { LocaleService } from '../../../core/locale.service';
 
 @Component({
   selector: 'app-quick-answer-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   template: `
     @if (quickAnswerText()) {
       <section 
@@ -24,23 +26,23 @@ import { JobStatus } from '../../../core/jobs.service';
         >
           <span class="chevron" [class.open]="isExpanded()" aria-hidden="true">&#9656;</span>
           <span class="lightning-bolt" aria-hidden="true">⚡</span>
-          <h3 id="qa-title">Quick Answer</h3>
+          <h3 id="qa-title">{{ 'Quick Answer' | translate }}</h3>
           
           <!-- Badges & Metadata -->
           <div class="metadata-badges">
             @if (state() === 'DONE') {
-              <span class="badge superseded">Superseded by final report</span>
+              <span class="badge superseded">{{ 'Superseded by final report' | translate }}</span>
             } @else {
               @if (isA2()) {
-                <span class="badge enhanced-badge animate-pulse-subtle">Enhanced (A2)</span>
+                <span class="badge enhanced-badge animate-pulse-subtle">{{ 'Enhanced (A2)' | translate }}</span>
               } @else if (isA1()) {
-                <span class="badge basic-badge">Basic (A1)</span>
+                <span class="badge basic-badge">{{ 'Basic (A1)' | translate }}</span>
               }
 
               @if (isCached()) {
-                <span class="badge cached-badge">Cached</span>
+                <span class="badge cached-badge">{{ 'Cached' | translate }}</span>
               } @else {
-                <span class="badge run-badge">Current Run</span>
+                <span class="badge run-badge">{{ 'Current Run' | translate }}</span>
               }
             }
           </div>
@@ -62,7 +64,7 @@ import { JobStatus } from '../../../core/jobs.service';
         >
           @if (showA2UpgradeAlert()) {
             <div class="upgrade-banner" role="status">
-              <span class="sparkle">✨</span> Enhanced answer updated from current research
+              <span class="sparkle">✨</span> {{ 'Enhanced answer updated from current research' | translate }}
             </div>
           }
           
@@ -275,6 +277,7 @@ import { JobStatus } from '../../../core/jobs.service';
 })
 export class QuickAnswerCardComponent {
   status = input<JobStatus | null>(null);
+  private locale = inject(LocaleService);
 
   // Manual toggle state
   private userExpanded = signal<boolean | null>(null);
@@ -309,7 +312,9 @@ export class QuickAnswerCardComponent {
     if (!dateStr) return '';
     try {
       const d = new Date(dateStr);
-      return `Updated at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      return this.locale.instant('Updated at {{time}}', {
+        time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
     } catch {
       return '';
     }
@@ -318,9 +323,12 @@ export class QuickAnswerCardComponent {
   // Generates announcements for screen readers when quick answer changes
   liveRegionAnnouncement = computed(() => {
     const text = this.quickAnswerText();
-    const type = this.isA2() ? 'Enhanced' : 'Basic';
-    if (!text) return 'Quick Answer is empty.';
-    return `${type} Quick Answer updated: ${text.substring(0, 100)}...`;
+    const type = this.isA2() ? this.locale.instant('Enhanced') : this.locale.instant('Basic');
+    if (!text) return this.locale.instant('Quick Answer is empty.');
+    return this.locale.instant('{{type}} Quick Answer updated: {{text}}...', {
+      type,
+      text: text.substring(0, 100)
+    });
   });
 
   toggleExpanded() {

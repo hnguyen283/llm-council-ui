@@ -2,7 +2,9 @@ import { Component, inject, signal, OnInit, AfterViewInit, NgZone } from '@angul
 import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
+import { LocaleService } from '../../core/locale.service';
 
 declare var google: any;
 
@@ -16,13 +18,13 @@ declare var google: any;
 @Component({
   selector: 'app-signup',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, TranslateModule],
   template: `
     <div class="wrap">
       <div class="card">
         @if (showRegistrationForm()) {
-          <h1>Complete account</h1>
-          <p class="subtitle">Set your username and an optional password to complete your Google account registration.</p>
+          <h1>{{ 'Complete account' | translate }}</h1>
+          <p class="subtitle">{{ 'Set your username and an optional password to complete your Google account registration.' | translate }}</p>
 
           @if (error()) {
             <div class="error">{{ error() }}</div>
@@ -30,27 +32,27 @@ declare var google: any;
 
           <form (ngSubmit)="submitRegistration()">
             <label class="form-field">
-              <span>Google Email</span>
+              <span>{{ 'Google Email' | translate }}</span>
               <input type="text" [value]="email()" disabled class="disabled-input" />
             </label>
             <label class="form-field">
-              <span>Username</span>
+              <span>{{ 'Username' | translate }}</span>
               <input type="text" [(ngModel)]="username" name="username" required autocomplete="username" [disabled]="busy()" />
             </label>
             <label class="form-field">
-              <span>Password (Optional, min 12 chars)</span>
-              <input type="password" [(ngModel)]="password" name="password" autocomplete="new-password" placeholder="Leave blank for Google-only login" [disabled]="busy()" />
+              <span>{{ 'Password (Optional, min 12 chars)' | translate }}</span>
+              <input type="password" [(ngModel)]="password" name="password" autocomplete="new-password" [placeholder]="'Leave blank for Google-only login' | translate" [disabled]="busy()" />
             </label>
 
             <button class="primary" type="submit" [disabled]="busy() || !username">
-              {{ busy() ? 'Completing...' : 'Complete Registration' }}
+              {{ (busy() ? 'Completing...' : 'Complete Registration') | translate }}
             </button>
           </form>
 
-          <p class="hint"><a (click)="cancelRegistration()" class="start-over-link">Start over</a></p>
+          <p class="hint"><a (click)="cancelRegistration()" class="start-over-link">{{ 'Start over' | translate }}</a></p>
         } @else {
-          <h1>Create account</h1>
-          <p class="subtitle">Google Sign-in is the only supported method for creating an account.</p>
+          <h1>{{ 'Create account' | translate }}</h1>
+          <p class="subtitle">{{ 'Google Sign-in is the only supported method for creating an account.' | translate }}</p>
 
           @if (error()) {
             <div class="error">{{ error() }}</div>
@@ -59,7 +61,7 @@ declare var google: any;
           @if (busy()) {
             <div class="loading-wrapper">
               <span class="spinner"></span>
-              <p class="loading-text">Authenticating with Google…</p>
+              <p class="loading-text">{{ 'Authenticating with Google...' | translate }}</p>
             </div>
           } @else {
             <div class="google-btn-wrapper">
@@ -67,7 +69,7 @@ declare var google: any;
             </div>
           }
 
-          <p class="hint">Already have an account? <a routerLink="/login">Sign in</a></p>
+          <p class="hint">{{ 'Already have an account?' | translate }} <a routerLink="/login">{{ 'Sign in' | translate }}</a></p>
         }
       </div>
     </div>
@@ -101,6 +103,7 @@ export class SignupComponent implements OnInit, AfterViewInit {
   private auth   = inject(AuthService);
   private router = inject(Router);
   private ngZone = inject(NgZone);
+  private locale = inject(LocaleService);
 
   showRegistrationForm = signal(false);
   email = signal('');
@@ -132,7 +135,7 @@ export class SignupComponent implements OnInit, AfterViewInit {
         }
       },
       error: () => {
-        this.error.set('Failed to load signup configuration. Please check backend connectivity.');
+        this.error.set(this.locale.instant('Failed to load signup configuration. Please check backend connectivity.'));
       }
     });
   }
@@ -170,7 +173,7 @@ export class SignupComponent implements OnInit, AfterViewInit {
       },
       error: (err: HttpErrorResponse) => {
         this.busy.set(false);
-        let msg = 'Failed to complete registration.';
+        let msg = this.locale.instant('Failed to complete registration.');
         if (err.error && typeof err.error === 'object' && err.error.message) {
           msg = err.error.message;
         }
@@ -217,10 +220,10 @@ export class SignupComponent implements OnInit, AfterViewInit {
         },
         error: (err: HttpErrorResponse) => {
           this.busy.set(false);
-          let message = 'Failed to sign up with Google.';
+          let message = this.locale.instant('Failed to sign up with Google.');
           const body = err.error;
           if (err.status === 403) {
-            message = 'Access denied. Sign up is restricted to authorized email domains.';
+            message = this.locale.instant('Access denied. Sign up is restricted to authorized email domains.');
           } else if (body && typeof body === 'object' && body.message) {
             message = body.message;
           }
