@@ -1,6 +1,5 @@
-import { Component, input, output, model, signal, computed, HostListener, effect, inject } from '@angular/core';
+import { Component, input, output, model, signal, HostListener, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { PromptCacheEntry } from '../../../core/prompt-cache.service';
 import { LOCALES, LocaleService } from '../../../core/locale.service';
@@ -11,7 +10,7 @@ import { UserUsage } from '../../../core/usage.service';
 @Component({
   selector: 'app-history-sidebar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PasswordChangeFormComponent, UsageSummaryCardComponent],
+  imports: [CommonModule, TranslateModule, PasswordChangeFormComponent, UsageSummaryCardComponent],
   template: `
     <!-- Backdrop Overlay for Mobile -->
     @if (isOpen()) {
@@ -44,40 +43,12 @@ import { UserUsage } from '../../../core/usage.service';
         </button>
       </div>
 
-      <!-- Compressed Search and Filters Section -->
-      <div class="filters-section">
-        <div class="search-box">
-          <label for="history-search" class="sr-only">{{ 'Search prompts' | translate }}</label>
-          <input 
-            type="text" 
-            id="history-search" 
-            [(ngModel)]="searchQuery" 
-            [placeholder]="'Search prompts...' | translate"
-            [attr.aria-label]="'Search prompts' | translate"
-          />
-        </div>
-        <div class="filter-box">
-          <label for="status-filter" class="sr-only">{{ 'Filter by status' | translate }}</label>
-          <select 
-            id="status-filter" 
-            [(ngModel)]="selectedStatus" 
-            [attr.aria-label]="'Filter by status' | translate"
-          >
-            <option value="ALL">{{ 'All Statuses' | translate }}</option>
-            <option value="DONE">{{ 'Completed' | translate }}</option>
-            <option value="RUNNING">{{ 'Running' | translate }}</option>
-            <option value="FAILED">{{ 'Failed' | translate }}</option>
-            <option value="CANCELED">{{ 'Canceled' | translate }}</option>
-          </select>
-        </div>
-      </div>
-
       <!-- Compressed History Items List -->
       <div class="history-list" role="list">
-        @if (filteredQueries().length === 0) {
+        @if (recentQueries().length === 0) {
           <div class="empty-state">{{ 'No history items found.' | translate }}</div>
         } @else {
-          @for (item of filteredQueries(); track item.timestamp) {
+          @for (item of recentQueries(); track item.timestamp) {
             <button 
               type="button" 
               class="history-item" 
@@ -213,6 +184,7 @@ import { UserUsage } from '../../../core/usage.service';
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
+      min-height: 0;
       z-index: 95;
       transform: translateX(-100%);
       transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -230,6 +202,7 @@ import { UserUsage } from '../../../core/usage.service';
       align-items: center;
       padding: 10px 14px;
       border-bottom: 1px solid var(--border);
+      flex: 0 0 auto;
     }
 
     .sidebar-header h2 {
@@ -259,34 +232,10 @@ import { UserUsage } from '../../../core/usage.service';
       background: rgba(255, 255, 255, 0.05);
     }
 
-    /* Compressed Filters Section */
-    .filters-section {
-      padding: 10px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.05);
-    }
-
-    .search-box input, .filter-box select {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      padding: 6px 10px;
-      width: 100%;
-      font-size: 13px;
-      height: 40px; /* max 40-44px */
-    }
-
-    .filter-box select {
-      cursor: pointer;
-    }
-
     /* History List */
     .history-list {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 10px 14px;
       display: flex;
@@ -387,6 +336,9 @@ import { UserUsage } from '../../../core/usage.service';
 
     /* Bottom Settings Section */
     .sidebar-footer {
+      flex: 0 0 auto;
+      max-height: min(58vh, 520px);
+      overflow-y: auto;
       padding: 0 14px 14px 14px;
       display: flex;
       flex-direction: column;
@@ -550,6 +502,9 @@ import { UserUsage } from '../../../core/usage.service';
       .close-btn {
         display: none;
       }
+      .sidebar-footer {
+        max-height: min(64vh, 620px);
+      }
     }
   `]
 })
@@ -575,9 +530,6 @@ export class HistorySidebarComponent {
   setLocale = output<string>();
   logout = output<void>();
   loadUsage = output<void>();
-
-  searchQuery = '';
-  selectedStatus = 'ALL';
 
   // Footer collapsible states
   usageExpanded = signal(false);
@@ -617,22 +569,6 @@ export class HistorySidebarComponent {
   toggleSettings() {
     this.settingsExpanded.update(v => !v);
   }
-
-  filteredQueries = computed(() => {
-    const list = this.recentQueries();
-    const query = this.searchQuery.trim().toLowerCase();
-    const status = this.selectedStatus;
-
-    return list.filter(item => {
-      const matchesSearch = !query || item.query.toLowerCase().includes(query) || 
-        (item.status.quickAnswer && item.status.quickAnswer.toLowerCase().includes(query)) ||
-        (item.status.result?.directAnswer && item.status.result.directAnswer.toLowerCase().includes(query));
-
-      const matchesStatus = status === 'ALL' || item.status.state === status;
-
-      return matchesSearch && matchesStatus;
-    });
-  });
 
   getPreviewText(item: PromptCacheEntry): string {
     if (item.status.result?.directAnswer) {

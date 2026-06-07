@@ -25,9 +25,9 @@ import { FinalReport } from '../../core/jobs.service';
           <h2>{{ 'Direct answer' | translate }}</h2>
           <span
             class="da-confidence da-confidence-{{ confidenceClass() }}"
-            [title]="'Overall report confidence: {{confidence}}' | translate:{ confidence: report()?.confidence ?? 'LOW' }"
+            [title]="'Overall report confidence: {{confidence}}' | translate:{ confidence: (confidenceLabelKey() | translate) }"
           >
-            {{ report()?.confidence }} {{ 'confidence' | translate }}
+            {{ confidenceLabelKey() | translate }}
           </span>
         </div>
         <p class="da-body">{{ report()?.directAnswer }}</p>
@@ -104,5 +104,14 @@ export class DirectAnswerComponent {
   readonly confidenceClass = computed(() => {
     const c = this.report()?.confidence;
     return (c ?? 'low').toLowerCase();
+  });
+
+  readonly confidenceLabelKey = computed(() => {
+    switch ((this.report()?.confidence ?? '').toUpperCase()) {
+      case 'HIGH': return 'High confidence';
+      case 'MEDIUM': return 'Medium confidence';
+      case 'LOW': return 'Low confidence';
+      default: return 'Low confidence';
+    }
   });
 }

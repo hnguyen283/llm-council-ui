@@ -31,15 +31,18 @@ import { UserUsage } from '../../../core/usage.service';
             </div>
             
             <div class="metric-item">
-              <span class="label">{{ 'Estimated Cost' | translate }}</span>
-              <span class="value">{{ formattedCost() }}</span>
+              <span class="label">{{ 'Tokens Used Today' | translate }}</span>
+              <span class="value">{{ formattedTokens(u.currentTokens) }} / {{ formattedTokens(u.limitTokens) }}</span>
+              <div class="progress-bar">
+                <div class="fill" [style.width.%]="tokenPercent()"></div>
+              </div>
             </div>
 
             <div class="metric-item">
-              <span class="label">{{ 'Remaining Budget' | translate }}</span>
-              <span class="value">{{ formattedRemaining() }}</span>
+              <span class="label">{{ 'Daily Tokens Remaining' | translate }}</span>
+              <span class="value">{{ formattedTokens(u.remainingTokens) }}</span>
               <div class="progress-bar">
-                <div class="fill green" [style.width.%]="costPercentRemaining()"></div>
+                <div class="fill green" [style.width.%]="tokenPercentRemaining()"></div>
               </div>
             </div>
           </div>
@@ -157,21 +160,19 @@ export class UsageSummaryCardComponent {
     return Math.min(100, (u.currentRequests / u.limitRequests) * 100);
   });
 
-  readonly costPercentRemaining = computed(() => {
+  readonly tokenPercent = computed(() => {
     const u = this.usage();
-    if (!u || u.limitCostMicros === 0) return 0;
-    return Math.max(0, Math.min(100, (u.remainingCostMicros / u.limitCostMicros) * 100));
+    if (!u || u.limitTokens === 0) return 0;
+    return Math.min(100, (u.currentTokens / u.limitTokens) * 100);
   });
 
-  readonly formattedCost = computed(() => {
+  readonly tokenPercentRemaining = computed(() => {
     const u = this.usage();
-    if (!u) return '$0.00';
-    return '$' + (u.currentCostMicros / 1000000.0).toFixed(2);
+    if (!u || u.limitTokens === 0) return 0;
+    return Math.max(0, Math.min(100, (u.remainingTokens / u.limitTokens) * 100));
   });
 
-  readonly formattedRemaining = computed(() => {
-    const u = this.usage();
-    if (!u) return '$0.00';
-    return '$' + (u.remainingCostMicros / 1000000.0).toFixed(2);
-  });
+  formattedTokens(value: number): string {
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Math.max(0, value));
+  }
 }

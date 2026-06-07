@@ -150,18 +150,21 @@ import { UsageService } from '../../core/usage.service';
             </section>
           }
 
-          <!-- Quick Answer Card -->
-          <app-quick-answer-card [status]="status()"></app-quick-answer-card>
+          <!-- Quick Answer Card while the final report is not ready yet -->
+          @if (!status()?.result) {
+            <app-quick-answer-card [status]="status()"></app-quick-answer-card>
+          }
 
           <!-- Final Answer Card -->
           @if (status()?.result; as report) {
             <app-direct-answer [report]="report" />
+            <app-quick-answer-card [status]="status()"></app-quick-answer-card>
 
             <section class="report">
               <div class="report-header">
                 <h2>{{ 'Final report' | translate }}</h2>
                 <span class="confidence confidence-{{ report.confidence.toLowerCase() }}">
-                  {{ report.confidence }} {{ 'confidence' | translate }}
+                  {{ confidenceLabelKey(report.confidence) | translate }}
                 </span>
               </div>
 
@@ -727,6 +730,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'CANCEL_REQUESTED': return this.localeService.instant('Canceling');
       case 'FAILED': return this.localeService.instant('Failed');
       default: return state;
+    }
+  }
+
+  confidenceLabelKey(confidence: string | null | undefined): string {
+    switch ((confidence ?? '').toUpperCase()) {
+      case 'HIGH': return 'High confidence';
+      case 'MEDIUM': return 'Medium confidence';
+      case 'LOW': return 'Low confidence';
+      default: return 'Low confidence';
     }
   }
 
