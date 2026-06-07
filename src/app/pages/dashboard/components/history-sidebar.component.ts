@@ -543,7 +543,7 @@ export class HistorySidebarComponent {
     });
   }
 
-  @HostListener('document:keydown.escape', ['$event'])
+  @HostListener('document:keydown.escape')
   handleEscapeKey() {
     if (this.isOpen()) {
       this.closeSidebar();

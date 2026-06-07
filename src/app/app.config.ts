@@ -1,8 +1,8 @@
-import { ApplicationConfig, importProvidersFrom, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
-import { MissingTranslationHandler, MissingTranslationHandlerParams, TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { MissingTranslationHandler, MissingTranslationHandlerParams, provideTranslateService, TranslateLoader } from '@ngx-translate/core';
+import { TRANSLATE_HTTP_LOADER_CONFIG, TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 
@@ -10,10 +10,6 @@ export class EnglishKeyMissingTranslationHandler implements MissingTranslationHa
   handle(params: MissingTranslationHandlerParams): string {
     return params.key;
   }
-}
-
-export function translateHttpLoaderFactory(http: HttpClient): TranslateHttpLoader {
-  return new TranslateHttpLoader(http, '/i18n/', '.json');
 }
 
 /**
@@ -29,18 +25,22 @@ export const appConfig: ApplicationConfig = {
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
     provideHttpClient(withInterceptors([authInterceptor])),
-    importProvidersFrom(TranslateModule.forRoot({
-      defaultLanguage: 'en',
+    {
+      provide: TRANSLATE_HTTP_LOADER_CONFIG,
+      useValue: { prefix: '/i18n/', suffix: '.json' }
+    },
+    ...provideTranslateService({
+      lang: 'en',
+      fallbackLang: 'en',
       useDefaultLang: true,
       loader: {
         provide: TranslateLoader,
-        useFactory: translateHttpLoaderFactory,
-        deps: [HttpClient]
+        useClass: TranslateHttpLoader
       },
       missingTranslationHandler: {
         provide: MissingTranslationHandler,
         useClass: EnglishKeyMissingTranslationHandler
       }
-    }))
+    })
   ]
 };
