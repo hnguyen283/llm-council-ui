@@ -1013,19 +1013,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
               this.handleInterruptedConnection(jobId, message);
             }
           },
-          error: () => {
+          error: (getErr: any) => {
             if (this.activeJobId !== jobId) return;
-            const failed: JobStatus = {
-              jobId, state: 'FAILED', stage: 'failed',
-              updatedAt: new Date().toISOString(),
-              result: null,
-              error: message,
-            };
-            this.status.set(failed);
-            this.persistStatus(failed);
-            this.stopNowTicker();
-            this.canceling.set(false);
-            this.activeJobId = null;
+            if (getErr?.status === 404) {
+              const failed: JobStatus = {
+                jobId, state: 'FAILED', stage: 'failed',
+                updatedAt: new Date().toISOString(),
+                result: null,
+                error: this.localeService.instant('Job not found'),
+              };
+              this.status.set(failed);
+              this.persistStatus(failed);
+              this.stopNowTicker();
+              this.canceling.set(false);
+              this.activeJobId = null;
+            } else {
+              this.handleInterruptedConnection(jobId, message);
+            }
           }
         });
       },
