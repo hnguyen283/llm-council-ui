@@ -2,7 +2,7 @@
 
 Simple SPA for the [llm-council](../llm-council) Spring backend. It submits
 research queries, streams workflow progress over SSE, and renders the final
-adjudicated report.
+adjudicated report. Project specifications and documentation are hosted in the sibling [`llm-council-docs`](../llm-council-docs) repository.
 
 Some build artifacts still use the original project name
 `ai-orchestrator-ui` in `angular.json` and `dist/ai-orchestrator-ui/`.
