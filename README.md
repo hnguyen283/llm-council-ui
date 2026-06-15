@@ -23,7 +23,7 @@ Use this path when validating login, refresh, logout, mobile resume, or any
 Secure/SameSite cookie behavior.
 
 1. Create trusted local certs as described in
-   [docs/runbooks/https-local-development.md](../llm-council/docs/runbooks/https-local-development.md).
+   [docs/runbooks/https-local-development.md](../llm-council-docs/docs/runbooks/https-local-development.md).
 2. Put the UI cert files at:
    - `ssl/cert.pem`
    - `ssl/key.pem`
