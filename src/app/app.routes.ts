@@ -36,5 +36,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent)
   },
+  {
+    path: 'privacy',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./pages/privacy/privacy-center.component').then(m => m.PrivacyCenterComponent)
+  },
   { path: '**', redirectTo: 'dashboard' }
 ];

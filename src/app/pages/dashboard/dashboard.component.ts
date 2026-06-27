@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
@@ -23,6 +23,7 @@ import { UsageService } from '../../core/usage.service';
   imports: [
     FormsModule,
     TranslateModule,
+    RouterLink,
     DirectAnswerComponent,
     HistorySidebarComponent,
     QuickAnswerCardComponent,
@@ -64,6 +65,10 @@ import { UsageService } from '../../core/usage.service';
             </button>
             <div class="brand">{{ 'LLM Council' | translate }}</div>
           </div>
+          <nav class="header-nav" [attr.aria-label]="'Account navigation' | translate">
+            <a routerLink="/dashboard" class="active" aria-current="page">{{ 'Research' | translate }}</a>
+            <a routerLink="/privacy">{{ 'Privacy' | translate }}</a>
+          </nav>
         </header>
 
         <!-- Main Content Area -->
@@ -245,6 +250,29 @@ import { UsageService } from '../../core/usage.service';
       background: linear-gradient(135deg, var(--text) 30%, var(--accent) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+    }
+
+    .header-nav {
+      display: flex;
+      align-self: stretch;
+      gap: 8px;
+    }
+
+    .header-nav a {
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .header-nav a:hover,
+    .header-nav a.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
     }
 
     .icon-btn {
