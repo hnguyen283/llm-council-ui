@@ -27,107 +27,111 @@ export interface StageTiming {
         >
           <span class="chevron" [class.open]="isMainExpanded()" aria-hidden="true">&#9656;</span>
           <span>{{ 'Advanced Request Details' | translate }}</span>
-          <span class="badge" *ngIf="s.result?.sources?.length">
-            {{ 'Sources count' | translate:{ count: s.result?.sources?.length } }}
-          </span>
+          @if (s.result; as result) {
+            <span class="badge" *ngIf="result.sources.length">
+              {{ 'Sources count' | translate:{ count: result.sources.length } }}
+            </span>
+          }
         </button>
 
         <!-- Main Details Content area -->
-        <div 
-          id="main-details-content" 
+        <div
+          id="main-details-content"
           class="main-details-content"
           [class.show]="isMainExpanded()"
         >
-          <!-- 1. Key Findings Collapsible -->
-          @if (s.result?.keyFindings?.length) {
-            <div class="sub-block">
-              <button
-                type="button"
-                class="sub-collapsible-trigger"
-                [attr.aria-expanded]="isFindingsExpanded()"
-                (click)="toggleFindings()"
-                aria-controls="findings-content"
-              >
-                <span class="chevron" [class.open]="isFindingsExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>{{ 'Key Findings ({{count}})' | translate:{ count: s.result?.keyFindings?.length } }}</h4>
-              </button>
-              
-              <div 
-                id="findings-content" 
-                class="sub-collapsible-content"
-                [class.show]="isFindingsExpanded()"
-              >
-                <ul class="findings-list">
-                  @for (f of s.result?.keyFindings; track f) {
-                    <li>{{ f }}</li>
-                  }
-                </ul>
-              </div>
-            </div>
-          }
+          @if (s.result; as result) {
+            <!-- 1. Key Findings Collapsible -->
+            @if (result.keyFindings.length) {
+              <div class="sub-block">
+                <button
+                  type="button"
+                  class="sub-collapsible-trigger"
+                  [attr.aria-expanded]="isFindingsExpanded()"
+                  (click)="toggleFindings()"
+                  aria-controls="findings-content"
+                >
+                  <span class="chevron" [class.open]="isFindingsExpanded()" aria-hidden="true">&#9656;</span>
+                  <h4>{{ 'Key Findings ({{count}})' | translate:{ count: result.keyFindings.length } }}</h4>
+                </button>
 
-          <!-- 2. Sources Table Collapsible -->
-          @if (s.result?.sources?.length) {
-            <div class="sub-block">
-              <button
-                type="button"
-                class="sub-collapsible-trigger"
-                [attr.aria-expanded]="isSourcesExpanded()"
-                (click)="toggleSources()"
-                aria-controls="sources-content"
-              >
-                <span class="chevron" [class.open]="isSourcesExpanded()" aria-hidden="true">&#9656;</span>
-                <h4>{{ 'Sources & Citations' | translate }}</h4>
-              </button>
-              
-              <div 
-                id="sources-content" 
-                class="sub-collapsible-content scrollable-table-wrapper"
-                [class.show]="isSourcesExpanded()"
-              >
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">{{ 'Tier' | translate }}</th>
-                      <th scope="col">{{ 'Score' | translate }}</th>
-                      <th scope="col">URL</th>
-                      <th scope="col">{{ 'Rationale' | translate }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (src of s.result?.sources; track src.url) {
-                      <tr>
-                        <td>
-                          <span class="tier-badge" [class]="'tier-' + tierClass(src.reliability)">
-                            {{ src.reliability }}
-                          </span>
-                        </td>
-                        <td>
-                          <div class="score-container" [title]="src.rationale || ''">
-                            <span class="score-val" [class]="scoreBand(src.confidenceScore)">
-                              {{ src.confidenceScore }}
-                            </span>
-                            <div class="score-bar-bg">
-                              <div 
-                                class="score-bar-fill" 
-                                [class]="scoreBand(src.confidenceScore)"
-                                [style.width.%]="src.confidenceScore"
-                              ></div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <a [href]="src.url" target="_blank" rel="noopener" class="source-link">
-                            {{ shortUrl(src.url) }}
-                          </a>
-                        </td>
-                        <td class="rationale-text">{{ src.rationale || src.summary }}</td>
-                      </tr>
+                <div
+                  id="findings-content"
+                  class="sub-collapsible-content"
+                  [class.show]="isFindingsExpanded()"
+                >
+                  <ul class="findings-list">
+                    @for (f of result.keyFindings; track f) {
+                      <li>{{ f }}</li>
                     }
-                  </tbody>
-                </table>
+                  </ul>
+                </div>
               </div>
-            </div>
+            }
+
+            <!-- 2. Sources Table Collapsible -->
+            @if (result.sources.length) {
+              <div class="sub-block">
+                <button
+                  type="button"
+                  class="sub-collapsible-trigger"
+                  [attr.aria-expanded]="isSourcesExpanded()"
+                  (click)="toggleSources()"
+                  aria-controls="sources-content"
+                >
+                  <span class="chevron" [class.open]="isSourcesExpanded()" aria-hidden="true">&#9656;</span>
+                  <h4>{{ 'Sources & Citations' | translate }}</h4>
+                </button>
+
+                <div
+                  id="sources-content"
+                  class="sub-collapsible-content scrollable-table-wrapper"
+                  [class.show]="isSourcesExpanded()"
+                >
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ 'Tier' | translate }}</th>
+                        <th scope="col">{{ 'Score' | translate }}</th>
+                        <th scope="col">URL</th>
+                        <th scope="col">{{ 'Rationale' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (src of result.sources; track src.url) {
+                        <tr>
+                          <td>
+                            <span class="tier-badge" [class]="'tier-' + tierClass(src.reliability)">
+                              {{ src.reliability }}
+                            </span>
+                          </td>
+                          <td>
+                            <div class="score-container" [title]="src.rationale || ''">
+                              <span class="score-val" [class]="scoreBand(src.confidenceScore)">
+                                {{ src.confidenceScore }}
+                              </span>
+                              <div class="score-bar-bg">
+                                <div
+                                  class="score-bar-fill"
+                                  [class]="scoreBand(src.confidenceScore)"
+                                  [style.width.%]="src.confidenceScore"
+                                ></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <a [href]="src.url" target="_blank" rel="noopener" class="source-link">
+                              {{ shortUrl(src.url) }}
+                            </a>
+                          </td>
+                          <td class="rationale-text">{{ src.rationale || src.summary }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
           }
 
           <!-- 3. Stage Timings Collapsible (DEBUG ONLY) -->
@@ -143,9 +147,9 @@ export interface StageTiming {
                 <span class="chevron" [class.open]="isTimingsExpanded()" aria-hidden="true">&#9656;</span>
                 <h4>{{ 'Step-by-step Execution Timings' | translate }}</h4>
               </button>
-              
-              <div 
-                id="timings-content" 
+
+              <div
+                id="timings-content"
                 class="sub-collapsible-content"
                 [class.show]="isTimingsExpanded()"
               >
@@ -174,9 +178,9 @@ export interface StageTiming {
                 <span class="chevron" [class.open]="isTelemetryExpanded()" aria-hidden="true">&#9656;</span>
                 <h4>{{ 'Diagnostics & Raw State' | translate }}</h4>
               </button>
-              
-              <div 
-                id="telemetry-content" 
+
+              <div
+                id="telemetry-content"
                 class="sub-collapsible-content"
                 [class.show]="isTelemetryExpanded()"
               >
@@ -523,13 +527,13 @@ export class RequestDetailsAccordionComponent {
   status = input<JobStatus | null>(null);
   compactMode = input<boolean>(false);
   timings = input<StageTiming[]>([]);
-  
+
   // Debug mode isolate
   debugMode = input<boolean>(false);
 
   // Local collapsible toggles
   private userMainExpanded = signal<boolean | null>(null);
-  
+
   isMainExpanded = computed(() => {
     if (this.compactMode() && this.userMainExpanded() === null) {
       return false;
