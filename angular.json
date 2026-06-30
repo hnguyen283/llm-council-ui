@@ -46,6 +46,11 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+		  "options": {
+			"allowedHosts": [
+			  "tunnel.welllifeapp.com"
+			]
+		  },
           "configurations": {
             "production": { "buildTarget": "ai-orchestrator-ui:build:production" },
             "development": { "buildTarget": "ai-orchestrator-ui:build:development" }
