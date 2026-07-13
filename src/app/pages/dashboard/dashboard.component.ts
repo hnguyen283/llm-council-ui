@@ -10,6 +10,7 @@ import { JobSessionStorageService, JobSessionRecord } from '../../core/job-sessi
 import { LOCALES, LocaleCode, LocaleService } from '../../core/locale.service';
 import { DirectAnswerComponent } from './direct-answer.component';
 import { PromptCacheService, PromptCacheEntry } from '../../core/prompt-cache.service';
+import { WorkspaceService } from '../../core/workspace.service';
 
 // Decomposed components
 import { HistorySidebarComponent } from './components/history-sidebar.component';
@@ -69,6 +70,18 @@ import { UsageService } from '../../core/usage.service';
             <a routerLink="/dashboard" class="active" aria-current="page">{{ 'Research' | translate }}</a>
             <a routerLink="/privacy">{{ 'Privacy' | translate }}</a>
           </nav>
+          <label class="workspace-picker">
+            <span>{{ 'Workspace' | translate }}</span>
+            <select
+              [ngModel]="workspaceService.selectedWorkspaceId()"
+              (ngModelChange)="setWorkspace($event)"
+              [disabled]="workspaceService.loading() || workspaceService.workspaces().length <= 1"
+            >
+              @for (workspace of workspaceService.workspaces(); track workspace.tenantId) {
+                <option [ngValue]="workspace.tenantId">{{ workspace.name }}</option>
+              }
+            </select>
+          </label>
         </header>
 
         <!-- Main Content Area -->
@@ -273,6 +286,29 @@ import { UsageService } from '../../core/usage.service';
     .header-nav a.active {
       color: var(--text);
       border-bottom-color: var(--accent);
+    }
+
+    .workspace-picker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 0;
+    }
+
+    .workspace-picker select {
+      max-width: 220px;
+      min-width: 128px;
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-elev);
+      color: var(--text);
+      padding: 0 8px;
+      font: inherit;
     }
 
     .icon-btn {
@@ -606,6 +642,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private storage = inject(JobSessionStorageService);
   private promptCache = inject(PromptCacheService);
   readonly usageService = inject(UsageService);
+  readonly workspaceService = inject(WorkspaceService);
 
   // Shell open/close states
   historyOpen = signal(false);
@@ -714,6 +751,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.hydrateFromCache();
     this.loadRecentQueriesList();
     this.loadUsage();
+    this.workspaceService.load();
 
     // Subscribe to query params to isolate Developer Mode
     this.route.queryParams.subscribe(params => {
@@ -732,6 +770,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   setLocale(code: string) {
     this.localeService.set(code as LocaleCode);
+  }
+
+  setWorkspace(tenantId: string): void {
+    this.workspaceService.select(tenantId || null);
+    this.status.set(null);
+    this.activeJobId = null;
+    this.storage.clear();
+    this.loadUsage();
   }
 
   hasActiveJob(): boolean {

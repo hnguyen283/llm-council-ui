@@ -481,10 +481,15 @@ export class LoginComponent implements OnInit, AfterViewInit {
           this.busy.set(false);
           let message = this.locale.instant('Failed to sign in with Google.');
           const body = err.error;
-          if (err.status === 403) {
+          const code = err.headers?.get('X-Auth-Code') || (body && typeof body === 'object' && typeof body.code === 'string' ? body.code : null);
+          if (code === 'AUTH_GOOGLE_DOMAIN_DENIED') {
             message = this.locale.instant('Access denied. Sign-in is restricted to authorized email domains.');
           } else if (body && typeof body === 'object' && body.message) {
             message = body.message;
+          } else if (err.status === 403) {
+            message = this.locale.instant('Access denied. Please sign in with an allowed account.');
+          } else if (err.status === 503 || err.status >= 500) {
+            message = this.locale.instant('Authentication is temporarily unavailable. Please try again shortly.');
           }
           this.error.set(message);
           setTimeout(() => this.initGoogleSignIn(), 500);

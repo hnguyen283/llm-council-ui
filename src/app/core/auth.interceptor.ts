@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Observable, catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 import { AuthCode, reasonFor } from './error.codes';
+import { WorkspaceService } from './workspace.service';
 
 /**
  * Endpoints that must NEVER carry the Authorization header — these are the
@@ -29,13 +30,16 @@ const SKIP = ['/auth/login', '/auth/refresh', '/auth/signup'];
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth   = inject(AuthService);
   const router = inject(Router);
+  const workspace = inject(WorkspaceService);
 
   const skip = SKIP.some(p => req.url.includes(p));
   const t    = auth.token();
+  const workspaceId = !skip ? workspace.headerValue() : null;
+  const headers: Record<string, string> = {};
+  if (!skip && t) headers['Authorization'] = `Bearer ${t}`;
+  if (workspaceId) headers['X-Workspace-Id'] = workspaceId;
 
-  const authed = !skip && t
-    ? req.clone({ setHeaders: { Authorization: `Bearer ${t}` }, withCredentials: true })
-    : req.clone({ withCredentials: true });
+  const authed = req.clone({ setHeaders: headers, withCredentials: true });
 
   return next(authed).pipe(
     catchError((err: HttpErrorResponse): Observable<HttpEvent<unknown>> => {
@@ -55,8 +59,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
             return throwError(() => err);
           }
           const t2 = auth.token();
+          const retryHeaders: Record<string, string> = {};
+          if (t2) retryHeaders['Authorization'] = `Bearer ${t2}`;
+          const retryWorkspaceId = workspace.headerValue();
+          if (retryWorkspaceId) retryHeaders['X-Workspace-Id'] = retryWorkspaceId;
           const retry = req.clone({
-            setHeaders: t2 ? { Authorization: `Bearer ${t2}` } : {},
+            setHeaders: retryHeaders,
             withCredentials: true,
           });
           return next(retry);
