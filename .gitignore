@@ -5,6 +5,8 @@ dist/
 .DS_Store
 .env
 .env.local
+.ci/evidence/
+.ci/build/
 ssl/
 *.pem
 *.key
