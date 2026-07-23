@@ -248,5 +248,7 @@
   "Unable to submit the privacy request.": "Không thể gửi yêu cầu quyền riêng tư.",
   "View receipt": "Xem biên nhận",
   "Withdraw consent": "Rút lại sự đồng ý",
-  "Your authorized export is ready to download.": "Bản xuất được ủy quyền của bạn đã sẵn sàng để tải xuống."
+  "Your authorized export is ready to download.": "Bản xuất được ủy quyền của bạn đã sẵn sàng để tải xuống.",
+  "Access denied. Please sign up with an allowed account.": "Truy cập bị từ chối. Vui lòng đăng ký bằng tài khoản được phép.",
+  "Workspace": "Không gian làm việc"
 }
