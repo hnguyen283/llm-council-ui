@@ -18,16 +18,17 @@
     "i18n-check": "node scripts/check-i18n.js",
     "audit:prod": "npm audit --omit=dev",
     "license-check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn 'AGPL-3.0;AGPL-3.0-only;AGPL-3.0-or-later;SSPL-1.0;SSPL;RSALv2;Confluent Community License;BUSL-1.1;Elastic-License;Elastic-2.0;Custom: redis.io/legal/licenses;Custom: https://redis.io/legal/licenses' --excludePackages 'llm-council-ui@0.1.0'"
+    ,"ci": "bash ci/run.sh all"
   },
   "dependencies": {
-    "@angular/animations": "^22.0.0",
-    "@angular/common": "^22.0.0",
-    "@angular/compiler": "^22.0.0",
-    "@angular/core": "^22.0.0",
-    "@angular/forms": "^22.0.0",
-    "@angular/platform-browser": "^22.0.0",
-    "@angular/platform-browser-dynamic": "^22.0.0",
-    "@angular/router": "^22.0.0",
+    "@angular/animations": "^22.0.1",
+    "@angular/common": "^22.0.1",
+    "@angular/compiler": "^22.0.1",
+    "@angular/core": "^22.0.1",
+    "@angular/forms": "^22.0.1",
+    "@angular/platform-browser": "^22.0.1",
+    "@angular/platform-browser-dynamic": "^22.0.1",
+    "@angular/router": "^22.0.1",
     "@ngx-translate/core": "^17.0.0",
     "@ngx-translate/http-loader": "^17.0.0",
     "rxjs": "~7.8.2",
@@ -35,9 +36,9 @@
     "zone.js": "~0.16.2"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^22.0.0",
-    "@angular/cli": "^22.0.0",
-    "@angular/compiler-cli": "^22.0.0",
+    "@angular-devkit/build-angular": "^22.0.1",
+    "@angular/cli": "^22.0.1",
+    "@angular/compiler-cli": "^22.0.1",
     "license-checker-rseidelsohn": "^5.0.1",
     "typescript": "~6.0.3"
   }

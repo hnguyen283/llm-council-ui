@@ -248,5 +248,7 @@
   "Unable to submit the privacy request.": "Unable to submit the privacy request.",
   "View receipt": "View receipt",
   "Withdraw consent": "Withdraw consent",
-  "Your authorized export is ready to download.": "Your authorized export is ready to download."
+  "Your authorized export is ready to download.": "Your authorized export is ready to download.",
+  "Access denied. Please sign up with an allowed account.": "Access denied. Please sign up with an allowed account.",
+  "Workspace": "Workspace"
 }

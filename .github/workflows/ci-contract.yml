@@ -1,0 +1,14 @@
+name: ci-contract
+on: [pull_request, push]
+permissions: { contents: read }
+jobs:
+  ci-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '24.15.0', cache: npm }
+      - name: Run portable contract
+        run: bash ci/run.sh all
+      - uses: actions/upload-artifact@v4
+        with: { name: ci-evidence, path: .ci/evidence, if-no-files-found: error }
